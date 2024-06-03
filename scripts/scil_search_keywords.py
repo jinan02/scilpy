@@ -75,11 +75,12 @@ def main():
                 search_text = f.read()
 
             
-        # Test intersection of all keywords, either in filename or docstring
+        
             if args.next:
                 #if --next is specified use _test_adjacent_keywords to check if the keywords are next to eeach other.
                 if not (_test_adjacent_keywords(args.keywords, script_name) or _test_adjacent_keywords(args.keywords, search_text)):
                     continue
+            # Test intersection of all keywords, either in filename or docstring
             else:
                 #if --next is not specified use _test_matching_keywords to check if the keywords are all in
                 if not _test_matching_keywords(args.keywords, [script_name, search_text]):
