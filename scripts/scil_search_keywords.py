@@ -78,7 +78,7 @@ def main():
         # Test intersection of all keywords, either in filename or docstring
             if args.next:
                 #if --next is specified use _test_adjacent_keywords to check if the keywords are next to eeach other.
-                if not _test_adjacent_keywords(args.search_parser, script_name + ' ' + search_text):
+                if not (_test_adjacent_keywords(args.keywords, script_name) or _test_adjacent_keywords(args.keywords, search_text)):
                     continue
             else:
                 #if --next is not specified use _test_matching_keywords to check if the keywords are all in
@@ -132,7 +132,7 @@ def main():
             # Test intersection of all keywords, either in filename or docstring
             if args.next:
                 #if --next is specified use _test_adjacent_keywords to check if the keywords are next to eeach other.
-                if not _test_adjacent_keywords(args.keywords, filename + ' ' + search_text):
+                if not (_test_adjacent_keywords(args.keywords, filename) or _test_adjacent_keywords(args.keywords,search_text)):
                     continue
             else:
                 #if --next is not specified use _test_matching_keywords to check if the keywords are all in
