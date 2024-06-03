@@ -40,6 +40,9 @@ def _build_arg_parser():
                    help='Search through and display the full script argparser '
                         'instead of looking only at the docstring. (warning: '
                         'much slower).')
+    
+    p.add_argument('--next', action='store_true',
+                   help = 'Ensure the leywords appear next to each otherin the given order')
 
     add_verbose_arg(p)
 
@@ -73,8 +76,14 @@ def main():
 
             
         # Test intersection of all keywords, either in filename or docstring
-            if not _test_matching_keywords(args.keywords, [script_name, search_text]):
-                continue
+            if args.next:
+                #if --next is specified use _test_adjacent_keywords to check if the keywords are next to eeach other.
+                if not _test_adjacent_keywords(args.search_parser, script_name + ' ' + search_text):
+                    continue
+            else:
+                #if --next is not specified use _test_matching_keywords to check if the keywords are all in
+                if not _test_matching_keywords(args.keywords, [script_name, search_text]):
+                    continue
 
             matches.append(script_name)
             search_text = search_text or 'No docstring available!'
@@ -121,8 +130,15 @@ def main():
             search_text = _get_docstring_from_script_path(str(script))
 
             # Test intersection of all keywords, either in filename or docstring
-            if not _test_matching_keywords(args.keywords, [filename, search_text]):
-                continue
+            if args.next:
+                #if --next is specified use _test_adjacent_keywords to check if the keywords are next to eeach other.
+                if not _test_adjacent_keywords(args.keywords, filename + ' ' + search_text):
+                    continue
+            else:
+                #if --next is not specified use _test_matching_keywords to check if the keywords are all in
+                if not _test_matching_keywords(args.keywords, [filename, search_text]):
+                    continue
+
 
             matches.append(filename)
             search_text = search_text or 'No docstring available!'
@@ -246,6 +262,31 @@ def _split_first_sentence(text):
     sentence = text[:split_idx]
     remaining = text[split_idx:] if split_idx else ""
     return sentence, remaining
+
+
+def _test_adjacent_keywords(keywords, text):
+    """Test if keywords appear next to each other in the specified order in the text.
+
+    Parameters
+    ----------
+    keywords : List of str
+        Keywords to test for.
+    text : str
+        String that should contain the keywords.
+
+    Returns
+    -------
+    True if the keywords appear next to each other in the specified order.
+    """
+
+    position = 0
+    for key in keywords:
+        position = text.lower().find(key, position)
+        if position == -1:
+            return False
+        position += len(key)
+    return True
+
 
 
 if __name__ == '__main__':
