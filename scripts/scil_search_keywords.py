@@ -17,9 +17,7 @@ import argparse
 import ast
 import logging
 import pathlib
-import re
 import subprocess
-import numpy as np
 import nltk
 from nltk.stem import PorterStemmer
 from colorama import init, Fore, Style
@@ -64,7 +62,6 @@ def main():
 
     stemmed_keywords = _stem_keywords(args.keywords)
 
-    # Use directory of this script, should work with most installation setups
     script_dir = pathlib.Path(__file__).parent
     hidden_dir = script_dir / '.hidden'
 
@@ -78,9 +75,6 @@ def main():
 
 
     matches = []
-
-    keywords_regexes = [re.compile('(' + re.escape(kw) + ')', re.IGNORECASE)
-                        for kw in args.keywords]
 
     # Search through the argparser instead of the docstring        
     if args.search_parser: 
@@ -102,7 +96,7 @@ def main():
             display_short_info, display_long_info = _split_first_sentence(
                 search_text)
 
-            # Highlight found keywords using colorama
+            # Highlight found keywords 
             for keyword in args.keywords:
                 display_short_info = display_short_info.replace(keyword, f'{Fore.RED}{Style.BRIGHT}{keyword}{Style.RESET_ALL}')
                 display_long_info = display_long_info.replace(keyword, f'{Fore.RED}{Style.BRIGHT}{keyword}{Style.RESET_ALL}')
@@ -153,34 +147,6 @@ def main():
 
 def _make_title(text):
     return f'{Fore.BLUE}{Style.BRIGHT}{text.center(SPACING_LEN, SPACING_CHAR)}{Style.RESET_ALL}'
-
-
-def _test_matching_keywords(keywords, texts):
-    """Test multiple texts for matching keywords. Returns True only if all
-    keywords are present in any of the texts.
-
-    Parameters
-    ----------
-    keywords : Iterable of str
-        Keywords to test for.
-    texts : Iterable of str
-        Strings that should contain the keywords.
-
-    Returns
-    -------
-    True if all keywords were found in at least one of the texts.
-
-    """
-    matches = []
-    for key in keywords:
-        key_match = False
-        for text in texts:
-            if key.lower() in text.lower():
-                key_match = True
-                break
-        matches.append(key_match)
-
-    return np.all(matches)
 
 
 def _get_docstring_from_script_path(script):
@@ -234,26 +200,84 @@ def _split_first_sentence(text):
     return sentence, remaining
 
 def _stem_keywords(keywords):
+    """
+    Stem a list of keywords using PorterStemmer.
+
+    Parameters
+    ----------
+    keywords : list of str
+        Keywords to be stemmed.
+
+    Returns
+    -------
+    list of str
+        Stemmed keywords.
+    """
     return [stemmer.stem(keyword) for keyword in keywords]
 
 def _stem_text(text):
+    """
+    Stem all words in a text using PorterStemmer.
+
+    Parameters
+    ----------
+    text : str
+        Text to be stemmed.
+
+    Returns
+    -------
+    str
+        Stemmed text.
+    """
     words = nltk.word_tokenize(text)
     return ' '.join([stemmer.stem(word) for word in words])
 
 def _contains_stemmed_keywords(stemmed_keywords,text, filename):
+    """
+    Check if stemmed keywords are present in the text or filename.
+
+    Parameters
+    ----------
+    stemmed_keywords : list of str
+        Stemmed keywords to search for.
+    text : str
+        Text to search within.
+    filename : str
+        Filename to search within.
+
+    Returns
+    -------
+    bool
+        True if all stemmed keywords are found in the text or filename, False otherwise.
+    """
     stemmed_text = _stem_text(text)
     stemmed_filename = _stem_text(filename)
     return all([stem in stemmed_text or stem in stemmed_filename for stem in stemmed_keywords])
 
 def _generate_help_files():
-    """Call the external script generate_help_files to generate help files
+    """
+    Call the external script generate_help_files to generate help files
     """
     script_path = pathlib.Path(__file__).parent.parent / 'scilpy-bot-scripts'/'generate_help_files.py'
     #calling the extrernal script generate_help_files
     subprocess.run(['python', script_path], check=True)
     
 def _highlight_keywords(text, stemmed_keywords):
-    """Highlight the stemmed keywords in the given text using colorama."""
+    """
+    Highlight the stemmed keywords in the given text using colorama.
+
+    Parameters
+    ----------
+    text : str
+        Text to highlight keywords in.
+    stemmed_keywords : list of str
+        Stemmed keywords to highlight.
+
+    Returns
+    -------
+    str
+        Text with highlighted keywords.
+    """
     words = text.split()
     highlighted_text = []
     for word in words:
