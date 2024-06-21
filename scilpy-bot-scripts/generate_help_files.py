@@ -31,6 +31,10 @@ for script in scripts_dir.glob('*.py'):
 	if script.name == '__init__.py' or script.name == 'scil_search_keywords.py':
 		continue
 	help_file = hidden_dir / f'{script.name}.help'
+	# Check if help file already exists
+	if help_file.exists():
+		print(f'Help file for {script.name} already exists. Skipping.')
+		continue
 
 	# Run the script with --h and capture the output
 	result = subprocess.run(['python', script, '--h'], capture_output=True, text=True)
