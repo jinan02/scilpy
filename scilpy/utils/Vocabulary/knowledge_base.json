@@ -1,0 +1,1405 @@
+{
+    "scripts": [
+        {
+            "name": "scil_tractogram_pairwise_comparison.py",
+            "description": "This script is designed to compare and help visualize differences between two\ntractograms. This can be especially useful in studies where multiple\ntractograms from different algorithms or parameters need to be compared.\n\nA similar script (scil_bundle_pairwise_comparison.py) is available for bundles,\nwith metrics more adapted to bundles (and spatial agreement).\n\nThe difference is computed in terms of\n- A voxel-wise spatial distance between streamlines crossing each voxel.\n    This can help to see if both tractography reconstructions at each voxel\n    look similar (out_diff.nii.gz)\n- An angular correlation (ACC) between streamline orientation from TODI.\n    This compares the local orientation of streamlines at each voxel\n    (out_acc.nii.gz)\n- A patch-wise correlation between streamline density maps from both\n    tractograms. This compares where the high/low density regions agree or not\n    (out_corr.nii.gz)\n- A heatmap combining all the previous metrics using a harmonic means of the\n    normalized metrics to summarize general agreement (out_heatmap.nii.gz)",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_connectivity_compute_pca.py",
+            "description": "Script to compute PCA analysis on diffusion metrics. Output returned is all\nsignificant principal components (e.g. presenting eigenvalues > 1) in a\nconnectivity matrix format. This script can take into account all edges from\nevery subject in a population or only non-zero edges across all subjects.\n\nThe script can take directly as input a connectoflow output folder. Simply use\nthe --input_connectoflow flag. For other type of folder input, the script\nexpects a single folder containing all matrices for all subjects.\nExample:\n        [in_folder]\n        |--- sub-01_ad.npy\n        |--- sub-01_md.npy\n        |--- sub-02_ad.npy\n        |--- sub-02_md.npy\n        |--- ...\n\nThe plots, tables and principal components matrices will be outputted in the\ndesignated folder from the <out_folder> argument. If you want to move back your\nprincipal components matrices in your connectoflow output, you can use a\nsimilar bash command for all principal components:\nfor sub in `cat list_id.txt`;\ndo\n    cp out_folder/${sub}_PC1.npy connectoflow_output/$sub/Compute_Connectivity/\ndone\n\nInterpretation of resulting principal components can be done by evaluating the\nloadings values for each metrics. A value near 0 means that this metric doesn't\ncontribute to this specific component whereas high positive or negative values\nmean a larger contribution. Components can then be labeled based on which\nmetric contributes the highest. For example, a principal component showing a\nhigh loading for afd_fixel and near 0 loading for all other metrics can be\ninterpreted as axonal density (see Gagnon et al. 2022 for this specific example\nor ref [3] for an introduction to PCA).\n\nEXAMPLE USAGE:\nscil_connectivity_compute_pca.py input_folder/ output_folder/\n    --metrics ad fa md rd [...] --list_ids list_ids.txt",
+            "keywords": [],
+            "category": "connectivity"
+        },
+        {
+            "name": "scil_viz_connectivity.py",
+            "description": "Script to display a connectivity matrix and adjust the desired visualization.\nMade to work with scil_tractogram_segment_bundles_for_connectivity.py and\nscil_connectivity_reorder_rois.py.\n\nThis script can either display the axis labels as:\n- Coordinates (0..N)\n- Labels (using --labels_list)\n- Names (using --labels_list and --lookup_table)\nExamples of labels_list.txt and lookup_table.json can be found in the\nfreesurfer_flow output (https://github.com/scilus/freesurfer_flow)\n\nIf the matrix was made from a bigger matrix using\nscil_connectivity_reorder_rois.py, provide the text file(s), using\n--labels_list and/or --reorder_txt.\n\nThe chord chart is always displaying parting in the order they are defined\n(clockwise), the color is attributed in that order following a colormap. The\nthickness of the line represent the 'size/intensity', the greater the value is\nthe thicker the line will be. In order to hide the low values, two options are\navailable:\n- Angle threshold + alpha, any connections with a small angle on the chord\n    chart will be slightly transparent to increase the focus on bigger\n    connections.\n- Percentile, hide any connections with a value below that percentile",
+            "keywords": [],
+            "category": "viz"
+        },
+        {
+            "name": "scil_connectivity_graph_measures.py",
+            "description": "Evaluate graph theory measures from connectivity matrices.\nA length weighted and a streamline count weighted matrix are required since\nsome measures require one or the other.\n\nThis script evaluates the measures one subject at the time. To generate a\npopulation dictionary (similarly to other scil_connectivity_*.py scripts), use\nthe --append_json option as well as using the same output filename.\n>>> for i in hcp/*/; do scil_connectivity_graph_measures.py ${i}/sc_prob.npy\n    ${i}/len_prob.npy hcp_prob.json --append_json --avg_node_wise; done\n\nSome measures output one value per node, the default behavior is to list\nthem all into a list. To obtain only the average use the\n--avg_node_wise option.\n\nThe computed connectivity measures are:\ncentrality, modularity, assortativity, participation, clustering,\nnodal_strength, local_efficiency, global_efficiency, density, rich_club,\npath_length, edge_count, omega, sigma\n\nFor more details about the measures, please refer to\n- https://sites.google.com/site/bctnet/measures\n- https://github.com/aestrivex/bctpy/wiki\n\nThis script is under the GNU GPLv3 license, for more detail please refer to\nhttps://www.gnu.org/licenses/gpl-3.0.en.html\n\nFormerly: scil_evaluate_connectivity_graph_measures.py",
+            "keywords": [],
+            "category": "connectivity"
+        },
+        {
+            "name": "scil_tractogram_filter_by_roi.py",
+            "description": "Filtering of a tractogram based on any combination of conditions involving a\nROI (ex: keep streamlines whose endoints are inside the ROI, exclude\nstreamlines not entirely included in a ROI, etc.)\n\nSee also:\n    - scil_tractogram_detect_loops.py\n    - scil_tractogram_filter_by_anatomy.py\n        (Can reject streamlines with endpoints in the WM or the CSF based on\n        labels)\n    - scil_tractogram_filter_by_length.py\n    - scil_tractogram_filter_by_orientation.py\n\nCondition\n---------\nFor every type of ROI, two or three values are expected: MODE CRITERIA DISTANCE\n(DISTANCE is always optional)\n- MODE must be one of these values: ['any', 'all', 'either_end', 'both_ends']\n    - any: any part of the streamline must be in the mask\n    - all: all parts of the streamline must be in the mask.\n    - either_end: at least one end of the streamline must be in the mask.\n    - both_ends:  both ends of the streamline must be in the mask.\n- CRITERIA must be one of these values: ['include', 'exclude']\n    - Include: If condition from MODE is respected, streamline is included.\n    - Exlucde: If condition from MODE is respected, streamline is excluded.\n- DISTANCE must be an int and is optional.\n\n\nType of ROI\n-----------\n- Drawn ROI: Directly loaded from a binary file.\n- Atlas ROI: Selected label from an atlas.\n    - ID is one or multiple integer values in the atlas. If multiple values,\n        ID needs to be between quotes.\n        Example: \"1:6 9 10:15\" will use values between 1 and 6 and values\n                               between 10 and 15 included as well as value 9.\n- BDO: The ROI is the interior of a bounding box.\n- Planes: The ROI is the equivalent of a one-voxel plane.\n    * Using mode 'all' with x/y/z plane works but makes very little sense.\n\nNote: `--drawn_roi MASK.nii.gz all include` is equivalent to\n      `--drawn_roi INVERSE_MASK.nii.gz any exclude`\n\nFor example, this allows to find out all streamlines entirely in the WM in one\ncommand (without manually inverting the mask first) or to remove any streamline\nstaying in the GM without getting out.\n\nSupports multiple filtering conditions\n--------------------------------------\nMultiple filtering conditions can be used, with varied ROI types if necessary.\nCombining two conditions is equivalent to a logical AND between the conditions.\nOrder of application does not matter for the final result, but may change the\nintermediate files, if any.\n\nDistance management\n-------------------\nDISTANCE is optional, and it should be used carefully with large voxel size\n(e.g > 2.5mm). The value is in voxel for ROIs and in mm for bounding boxes.\nAnisotropic data will affect each direction differently.\n    When using --overwrite_distance, any filtering option with given criteria\nwill have its DISTANCE value replaced.\n\nFormerly: scil_filter_tractogram.py",
+            "keywords": [
+                "segment",
+                "atlas"
+            ],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_volume_b0_synthesis.py",
+            "description": "Wrapper for SyNb0 available in Dipy, to run it on a single subject.\nRequires Skull-Strip b0 and t1w images as input, the script will normalize the\nt1w's WM to 110, co-register both images, then register it to the appropriate\ntemplate, run SyNb0 and then transform the result back to the original space.\n\nSyNb0 is a deep learning model that predicts a synthetic a distortion-free\nb0 image from a distorted b0 and T1w.\n\nThis script must be used carefully, as it is meant to be used in an\nenvironment with the following dependencies already installed (not installed by\ndefault in Scilpy):\n- tensorflow-addons\n- tensorrt\n- tensorflow",
+            "keywords": [],
+            "category": "volume"
+        },
+        {
+            "name": "scil_viz_tractogram_seeds_3d.py",
+            "description": "Visualize seeds as 3D points, with heatmaps corresponding to seed density\n\nExample usages:\n\n>>> scil_viz_tractogram_seeds_3d.py seeds.nii.gz --tractogram tractogram.trk",
+            "keywords": [
+                "visualize",
+                "seed",
+                "density",
+                "3D",
+                "seed density"
+            ],
+            "category": "viz"
+        },
+        {
+            "name": "scil_labels_split_volume_from_lut.py",
+            "description": "Split a label image into multiple images where the name of the output images\nis taken from a lookup table (ex: left-lateral-occipital.nii.gz,\nright-thalamus.nii.gz, ...). Only the labels included in the lookup table\nare extracted.\n\nIMPORTANT: your label image must be of an integer type.\n\nFormerly: scil_split_volume_by_labels.py",
+            "keywords": [],
+            "category": "labels"
+        },
+        {
+            "name": "scil_bids_validate.py",
+            "description": "Create a json file from a BIDS dataset detailling all info\nneeded for tractoflow\n- DWI/rev_DWI\n- T1\n- fmap/sbref (based on IntendedFor entity)\n- Freesurfer (optional - could be one per participant\n              or one per participant/session)\n\nThe BIDS dataset MUST be homogeneous.\nThe metadata need to be uniform across all participants/sessions/runs\n\nMandatory entity: IntendedFor\nSensitive entities: PhaseEncodingDirection, TotalReadoutTime, direction\n\nFormerly: scil_validate_bids.py",
+            "keywords": [],
+            "category": "bids"
+        },
+        {
+            "name": "scil_viz_volume_histogram.py",
+            "description": "Script to display a histogram of a metric (FA, MD, etc.) from a binary mask\n(wm mask, vascular mask, ect.).\nThese two images must be coregister with each other.\n\n>>> scil_viz_volume_histogram.py metric.nii.gz mask_bin.nii.gz 8\n    out_filename_image.png",
+            "keywords": [
+                "visualize",
+                "histogram",
+                "metric"
+            ],
+            "category": "viz"
+        },
+        {
+            "name": "scil_surface_smooth.py",
+            "description": "Script to smooth a surface with a Laplacian blur.\n\nFor a standard FreeSurfer white matter mesh a step_size from 0.1 to 10\nis recommended\n\nSmoothing time = step_size * nb_steps\n    small amount of smoothing [step_size 1, nb_steps 10]\n    moderate amount of smoothing [step_size 10, nb_steps 100]\n    large amount of smoothing [step_size 100, nb_steps 1000]\n\nFormerly: scil_smooth_surface.py",
+            "keywords": [
+                "surface",
+                "mesh",
+                "vtk FreeSurfer"
+            ],
+            "category": "surface"
+        },
+        {
+            "name": "scil_viz_volume_scatterplot.py",
+            "description": "Script to display scatter plot between two maps (ex. FA and MD, ihMT and MT).\nBy default, no mask is applied to the data.\nDifferent options are available to mask or threshold data:\n  - a binary mask\n  - two probability maps, which can be used to threshold maps with\n    --in_prob_maps. A same threshold is applied on these two maps (--thr).\n  - parcellation, which can be used to plot values for each region of\n    an atlas (--in_atlas) or a subset of regions (--specific_label).\n    Atlas option required a json file (--atlas_lut) with indices and\n    names of each label corresponding to the atlas as following:\n    \"1\": \"lh_A8m\",\n    \"2\": \"rh_A8m\",\n    The numbers must be corresponding to the label indices in the json file.\n\nBe careful, you can not use all of them at the same time.\n\nFor general scatter plot without mask:\n>>> scil_viz_volume_scatterplot.py FA.nii.gz MD.nii.gz out_filename_image.png\n\nFor scatter plot with mask:\n>>> scil_viz_volume_scatterplot.py FA.nii.gz MD.nii.gz out_filename_image.png\n    --in_bin_mask mask_wm.nii.gz\n\nFor tissue probability scatter plot:\n>>> scil_viz_volume_scatterplot.py FA.nii.gz MD.nii.gz out_filename_image.png\n    --prob_maps wm_map.nii.gz gm_map.nii.gz\n\nFor scatter plot using atlas:\n>>> scil_viz_volume_scatterplot.py FA.nii.gz MD.nii.gz out_filename_image.png\n    --in_atlas atlas.nii.gz --atlas_lut atlas.json\n\n>>> scil_viz_volume_scatterplot.py FA.nii.gz MD.nii.gz out_filename_image.png\n    --in_atlas atlas.nii.gz --atlas_lut atlas.json\n    --specific_label 34 67 87",
+            "keywords": [
+                "visualize",
+                "scatterplot",
+                "distribution",
+                "metric"
+            ],
+            "category": "viz"
+        },
+        {
+            "name": "scil_search_keywords.py",
+            "description": "Search through all SCILPY scripts and their docstrings to find matches for the provided keywords.\nThe search will be performed across script names, docstrings, help files, keywords, and optionally synonyms.\nThe output will list the matching filenames along with the occurrences of each keyword, and their total score.\n\n- By default, the search includes synonyms for the keywords.\n- Use --no_synonyms to exclude synonyms from the search.\n- Use --search_category to limit the search to a specific category of scripts.\n- Use --verbose to display the full docstring.\n- Words enclosed in quotes will be searched as phrases, ensuring the words appear next to each other in the text.\n\n\nExamples:\n    scil_search_keywords.py tractogram filtering\n    scil_search_keywords.py --search_parser tractogram filtering -v\n    scil_search_keywords.py \"Spherical Harmonics\" convert\n    scil_search_keywords.py --no_synonyms tractogram filtering\n    scil_search_keywords.py --search_category --verbose tractogram filtering",
+            "keywords": [],
+            "category": "search"
+        },
+        {
+            "name": "scil_plot_stats_per_point.py",
+            "description": "Plot all mean/std per point for a subject or population json file from\ntractometry-flow.\nWARNING: For population, the displayed STDs is only showing the variation\nof the means. It does not account intra-subject STDs.\n\nFormerly: scil_plot_mean_std_per_point.py",
+            "keywords": [],
+            "category": "plot"
+        },
+        {
+            "name": "scil_frf_set_diffusivities.py",
+            "description": "Replace the fiber response function in the FRF file.\nUse this script when you want to use a fixed response function\nand keep the mean b0.\n\nThe FRF file is obtained from scil_frf_ssst.py or scil_frf_msmt.py in the case\nof multi-shell data.\n\nFormerly: scil_set_response_function.py",
+            "keywords": [
+                "fiber response function",
+                "response function",
+                "RF",
+                "FRF",
+                "diffusivity",
+                "diffusivities",
+                "fixed FRF"
+            ],
+            "category": "frf"
+        },
+        {
+            "name": "scil_viz_bundle_screenshot_mni.py",
+            "description": "Register bundle to a template for screenshots using a reference.\nThe template can be any MNI152 (any resolution, cropped or not)\nIf your in_anat has a skull, select a MNI152 template with a skull and\nvice-versa.\n\nIf the bundle is already in MNI152 space, do not use --target_template.\n\nAxial, coronal and sagittal slices are captured.\nSagittal can be capture from the left (default) or the right.\n\nFor the --roi argument: If 1 value is provided, the ROI will be white,\nif 4 values are provided, the ROI will be colored with the RGB values\nprovided, if 5 values are provided, it is RGBA (values from 0-255).",
+            "keywords": [],
+            "category": "viz"
+        },
+        {
+            "name": "scil_aodf_metrics.py",
+            "description": "Script to compute various metrics derivated from asymmetric ODF.\n\nThese metrics include the asymmetric peak directions image, a number of fiber\ndirections (nufid) map [1], the asymmetry index (ASI) map [2] and an odd-power\nmap [3].\n\nThe asymmetric peak directions image contains peaks per hemisphere, considering\nantipodal sphere directions as distinct. On a symmetric signal, the number of\nasymmetric peaks extracted is then twice the number of symmetric peaks.\n\nThe nufid map is the asymmetric alternative to NuFO maps. It counts the\nnumber of asymmetric peaks extracted and ranges in [0..N] with N the maximum\nnumber of peaks.\n\nThe asymmetric index is a cosine-based metric in the range [0..1], with 0\ncorresponding to a perfectly symmetric signal and 1 to a perfectly asymmetric\nsignal.\n\nThe odd-power map is also in the range [0..1], with 0 corresponding to a\nperfectly symmetric signal and 1 to a perfectly anti-symmetric signal. It is\ngiven as the ratio of the L2-norm of odd SH coefficients on the L2-norm of all\nSH coefficients.\n\nFormerly: scil_compute_asym_odf_metrics.py",
+            "keywords": [],
+            "category": "aodf"
+        },
+        {
+            "name": "scil_tractogram_segment_bundles_for_connectivity.py",
+            "description": "Compute a connectivity matrix from a tractogram and a parcellation.\n\nCurrent strategy is to keep the longest streamline segment connecting 2\nregions. If the streamline crosses other gray matter regions before reaching\nits final connected region, the kept connection is still the longest. This is\nrobust to compressed streamlines.\n\nThe output file is a hdf5 (.h5) where the keys are 'LABEL1_LABEL2' and each\ngroup is composed of 'data', 'offsets' and 'lengths' from the array_sequence.\nThe 'data' is stored in VOX/CORNER for simplicity and efficiency. See script\nscil_tractogram_convert_hdf5_to_trk.py to convert to a list of .trk bundles.\n\nFor the --outlier_threshold option the default is a recommended good trade-off\nfor a freesurfer parcellation. With smaller parcels (brainnetome, glasser) the\nthreshold should most likely be reduced.\n\nGood candidate connections to QC are the brainstem to precentral gyrus\nconnection and precentral left to precentral right connection, or equivalent\nin your parcellation.\n\nNOTE: this script can take a while to run. Please be patient.\nExample: on a tractogram with 1.8M streamlines, running on a SSD:\n- 15 minutes without post-processing, only saving final bundles.\n- 30 minutes with full post-processing, only saving final bundles.\n- 60 minutes with full post-processing, saving all possible files.\n\nFormerly: scil_decompose_connectivity.py",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_tracking_local_dev.py",
+            "description": "Local streamline HARDI tractography using scilpy-only methods -- no dipy (i.e\nno cython). The goal of this is to have a python-only version that can be\nmodified more easily by our team when testing new algorithms and parameters,\nand that can be used as parent classes in sub-projects of our lab such as in\ndwi_ml.\n\nWARNING. MUCH SLOWER THAN scil_tracking_local.py. We recommand using multi-\nprocessing with option --nb_processes.\n\nSimilar to scil_tracking_local:\n    The tracking direction is chosen in the aperture cone defined by the\n    previous tracking direction and the angular constraint.\n    - Algo 'det': the maxima of the spherical function (SF) the most closely\n    aligned to the previous direction.\n    - Algo 'prob': a direction drawn from the empirical distribution function\n    defined from the SF.\n\nContrary to scil_tracking_local:\n    - Algo 'eudx' is not yet available!\n    - Input nifti files do not necessarily need to be in isotropic resolution.\n    - The script works with asymmetric input ODF.\n    - The interpolation for the tracking mask and spherical function can be\n      one of 'nearest' or 'trilinear'.\n    - Runge-Kutta integration is supported for the step function.\n\nA few notes on Runge-Kutta integration.\n    1. Runge-Kutta integration is used to approximate the next tracking\n       direction by estimating directions from future tracking steps. This\n       works well for deterministic tracking. However, in the context of\n       probabilistic tracking, the next tracking directions cannot be estimated\n       in advance, because they are picked randomly from a distribution. It is\n       therefore recommanded to keep the rk_order to 1 for probabilistic\n       tracking.\n    2. As a rule of thumb, doubling the rk_order will double the computation\n       time in the worst case.\n\nReferences: [1] Girard, G., Whittingstall K., Deriche, R., and\n            Descoteaux, M. (2014). Towards quantitative connectivity analysis:\n            reducing tractography biases. Neuroimage, 98, 266-278.\n\nFormerly: scil_compute_local_tracking_dev.py",
+            "keywords": [
+                "development",
+                "runge-kutta",
+                "pure-python",
+                "onboarding",
+                "tractography",
+                "dipy"
+            ],
+            "category": "tracking"
+        },
+        {
+            "name": "scil_tractogram_apply_transform.py",
+            "description": "Transform a tractogram using an affine/rigid transformation and nonlinear\ndeformation (optional).\n\nFor more information on how to use the registration script, follow this link:\nhttps://scilpy.readthedocs.io/en/latest/documentation/tractogram_registration.html\n\nApplying transformation to a tractogram can lead to invalid streamlines (out of\nthe bounding box), and thus three strategies are available:\n1) Do nothing, may crash at saving if invalid streamlines are present.\n   [This is the default]\n2) --keep_invalid, save invalid streamlines. Leave it to the user to run\n    scil_tractogram_remove_invalid.py if needed.\n3) --remove_invalid, automatically remove invalid streamlines before saving.\n    Should not remove more than a few streamlines. Typically, the streamlines\n    that are rejected are the ones reaching the limits of the brain, ex, near\n    the pons.\n4) --cut_invalid, automatically cut invalid streamlines before saving, i.e. the\n   streamlines are kept but the points out of the bounding box are cut.\n\nExample:\nTo apply a transformation from ANTs to a tractogram, if the ANTs command was\nMOVING->REFERENCE...\n1) To apply the original transformation:\nscil_tractogram_apply_transform.py ${MOVING_FILE} ${REFERENCE_FILE}\n                                   0GenericAffine.mat ${OUTPUT_NAME}\n                                   --inverse\n                                   --in_deformation 1InverseWarp.nii.gz\n\n2) To apply the inverse transformation, i.e. REFERENCE->MOVING:\nscil_tractogram_apply_transform.py ${MOVING_FILE} ${REFERENCE_FILE}\n                                   0GenericAffine.mat ${OUTPUT_NAME}\n                                   --in_deformation 1Warp.nii.gz\n                                   --reverse_operation\n\nFormerly: scil_apply_transform_to_tractogram.py",
+            "keywords": [
+                "ants",
+                "registration",
+                "affine",
+                "linear",
+                "nonlinear"
+            ],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_sh_to_sf.py",
+            "description": "Script to sample SF values from a Spherical Harmonics signal. Outputs a Nifti\nfile with the SF values and an associated .bvec file with the chosen\ndirections.\n\nIf converting from SH to a DWI-like SF volume, --in_bval and --in_b0 need\nto be provided to concatenate the b0 image to the SF, and to generate the new\nbvals file. Otherwise, no .bval file will be created.\n\nFormerly: scil_compute_sf_from_sh.py",
+            "keywords": [
+                "spherical harmonics",
+                "spherical functions",
+                "SH",
+                "SF",
+                "convertion",
+                "conversion"
+            ],
+            "category": "sh"
+        },
+        {
+            "name": "scil_volume_math.py",
+            "description": "Performs an operation on a list of images. The supported operations are\nlisted below.\n\nThis script is loading all images in memory, will often crash after a few\nhundred images.\n\nSome operations such as multiplication or addition accept float value as\nparameters instead of images.\n> scil_volume_math.py multiplication img.nii.gz 10 mult_10.nii.gz\n\nFormerly: scil_image_math.py",
+            "keywords": [],
+            "category": "volume"
+        },
+        {
+            "name": "scil_connectivity_pairwise_agreement.py",
+            "description": "Evaluate pair-wise similarity measures of connectivity matrix.\n\nThe computed similarity measures are:\nsum of square difference and pearson correlation coefficent\n\nFormerly: scil_evaluate_connectivity_pairwaise_agreement_measures.py",
+            "keywords": [],
+            "category": "connectivity"
+        },
+        {
+            "name": "scil_dti_convert_tensors.py",
+            "description": "Conversion of tensors (the 6 values from the triangular matrix) between various\nsoftware standards. We cannot discover the input format type, user must know\nhow the tensors were created.",
+            "keywords": [
+                "tensor",
+                "tensors",
+                "triangular matrix",
+                "fsl format",
+                "nifti format",
+                "mrtrix format",
+                "dipy format"
+            ],
+            "category": "dti"
+        },
+        {
+            "name": "scil_dwi_prepare_topup_command.py",
+            "description": "Prepare a typical command for topup and create the necessary files.\nThe reversed b0 must be in a different file.\n\nFormerly: scil_prepare_topup_command.py",
+            "keywords": [],
+            "category": "dwi"
+        },
+        {
+            "name": "scil_denoising_nlmeans.py",
+            "description": "Script to denoise a dataset with the Non Local Means algorithm.\n\nFormerly: scil_run_nlmeans.py",
+            "keywords": [],
+            "category": "denoising"
+        },
+        {
+            "name": "scil_json_convert_entries_to_xlsx.py",
+            "description": "Convert a final aggregated json file to an Excel spreadsheet.\nTypically used during the tractometry pipeline.\n\nFormerly: scil_convert_json_to_xlsx.py",
+            "keywords": [],
+            "category": "json"
+        },
+        {
+            "name": "scil_tractogram_compute_density_map.py",
+            "description": "Compute a density map from a streamlines file. Can be binary.\n\nThis script correctly handles compressed streamlines.\n\nFormerly: scil_compute_streamlines_density_map.py",
+            "keywords": [
+                "TDI",
+                "track density imaging",
+                "streamline count"
+            ],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_bundle_shape_measures.py",
+            "description": "Evaluate basic measurements of bundle(s).\n\nThe computed measures are:\n    - volume_info: volume, volume_endpoints\n    - streamlines_info: streamlines_count, avg_length (in mm or in number of\n      point), average step size, min_length, max_length.\n      ** You may also get this information with scil_tractogram_print_info.py.\n    - shape_info: span, curl, diameter, elongation, surface area,\n      irregularity, end surface area, radius, end surface irregularity,\n      mean_curvature, fractal dimension.\n      ** The diameter, here, is a simple estimation using volume / length.\n      For a more complex calculation, see scil_bundle_diameter.py.\n\nWith more than one bundle, the measures are averaged over bundles. All\ntractograms must be in the same space.\n\nThe set average contains the average measures of all input bundles. The\nmeasures that are dependent on the streamline count are weighted by the number\nof streamlines of each bundle. Each of these average measure is computed by\nfirst summing the multiple of a measure and the streamline count of each\nbundle and divide the sum by the total number of streamlines. Thus, measures\nincluding length and span are essentially averages of all the streamlines.\nOther streamline-related set measure are computed with other set averages.\nWhereas bundle-related measures are computed as an average of all bundles.\nThese measures include volume and surface area.\n\nThe fractal dimension is dependent on the voxel size and the number of voxels.\nIf data comparison is performed, the bundles MUST be in same resolution.\n\nFormerly: scil_compute_bundle_volume.py or\nscil_evaluate_bundles_individual_measures.py",
+            "keywords": [
+                "geometry"
+            ],
+            "category": "bundle"
+        },
+        {
+            "name": "scil_gradients_apply_transform.py",
+            "description": "Transform bvecs using an affine/rigid transformation.\n\nFormerly: scil_apply_transform_to_bvecs.py.",
+            "keywords": [
+                "gradients",
+                "bvecs",
+                "b-vectors",
+                "transformation",
+                "transform"
+            ],
+            "category": "gradients"
+        },
+        {
+            "name": "scil_viz_fodf.py",
+            "description": "Visualize 2-dimensional fODF slice loaded from disk.\n\nGiven an image of SH coefficients, this script displays a slice in a\ngiven orientation. The user can also add a background on top of which the\nfODF are to be displayed. Using a full SH basis, the script can be used to\nvisualize asymmetric fODF. The user can supply a peaks image to visualize\npeaks on top of fODF.\n\nIf a transparency_mask is given (e.g. a brain mask), all values outside the\nmask non-zero values are set to full transparency in the saved scene.\n\n!!! CAUTION !!! The script is memory intensive about (9kB of allocated RAM per\nvoxel, or 9GB for a 1M voxel volume) with a sphere interpolated to 362 points.",
+            "keywords": [
+                "visualize",
+                "fiber odf",
+                "odf",
+                "sh",
+                "peaks",
+                "background"
+            ],
+            "category": "viz"
+        },
+        {
+            "name": "scil_tractogram_assign_custom_color.py",
+            "description": "The script uses scalars from an anatomy, data_per_point or data_per_streamline\n(e.g. commit_weights) to visualize them on the streamlines.\nSaves the RGB values in the data_per_point 'color' with 3 values per point:\n(color_x, color_y, color_z).\n\nIf called with .tck, the output will always be .trk, because data_per_point has\nno equivalent in tck file.\n\nIf used with a visualization software like MI-Brain\n(https://github.com/imeka/mi-brain), the 'color' dps is applied by default at\nloading time.\n\nCOLORING METHOD\nThis script maps the raw values from these sources to RGB using a colormap.\n    --use_dpp: The data from each point is converted to a color.\n    --use_dps: The same color is applied to all points of the streamline.\n    --from_anatomy: The voxel's color is used for the points of the streamlines\n    crossing it. See also scil_tractogram_project_map_to_streamlines.py. You\n    can have more options to project maps to dpp, and then use --use_dpp here.\n    --along_profile: The data used here is each point's position in the\n    streamline. To have nice results, you should first uniformize head/tail.\n    See scil_tractogram_uniformize_endpoints.py.\n    --local_angle.\n\nCOLORING OPTIONS\nA minimum and a maximum range can be provided to clip values. If the range of\nvalues is too large for intuitive visualization, a log transform can be\napplied.\n\nIf the data provided from --use_dps, --use_dpp and --from_anatomy are integer\nlabels, they can be mapped using a LookUp Table (--LUT).\nThe file provided as a LUT should be either .txt or .npy and if the size is\nN=20, then the data provided should be between 1-20.\n\nA custom colormap can be provided using --colormap. It should be a string\ncontaining a colormap name OR multiple Matplotlib named colors separated by -.\nThe colormap used for mapping values to colors can be saved to a png/jpg image\nusing the --out_colorbar option.\n\nSee also: scil_tractogram_assign_uniform_color.py, for simplified options.\n\nFormerly: scil_assign_custom_color_to_tractogram.py",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_NODDI_priors.py",
+            "description": "Compute the axial (para_diff), radial (perp_diff), and mean (iso_diff)\ndiffusivity priors for NODDI.\n\nFormerly: scil_compute_NODDI_priors.py",
+            "keywords": [],
+            "category": "NODDI"
+        },
+        {
+            "name": "scil_tractogram_resample.py",
+            "description": "Script to resample a tractogram to a set number of streamlines.\nDefault behavior:\n- IF number of requested streamlines is lower than streamline count: DOWNSAMPLE\n- IF number of requested streamlines is higher than streamline count: UPSAMPLE\nTo prevent upsample if not desired use --never_upsample.\n\nCan be useful to build training sets for machine learning algorithms, to\nupsample under-represented bundles or downsample over-represented bundles.\n\nWorks by either selecting a subset of streamlines or by generating new\nstreamlines by adding gaussian noise to existing ones.\n\nUpsampling:\n    Includes smoothing to compensate for the noisiness of new streamlines\n    generated by the process.\nDownsampling:\n    Includes the possibility of choosing randomly *per Quickbundle cluster* to\n    ensure that all clusters are represented in the final tractogram.\n\nExample usage:\n$ scil_tractogram_resample.py input.trk 1000 output.trk --point_wise_std 0.5 --gaussian 5 --keep_invalid_streamlines\n$ scil_visualize_bundles.py output.trk --local_coloring --width=0.1",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_freewater_maps.py",
+            "description": "Compute Free Water maps [1] using AMICO.\nThis script supports both single and multi-shell data.\n\nFormerly: scil_compute_freewater.py",
+            "keywords": [],
+            "category": "freewater"
+        },
+        {
+            "name": "scil_viz_dti_screenshot.py",
+            "description": "Register DWI to a template for screenshots.\nThe templates are on http://www.bic.mni.mcgill.ca/ServicesAtlases/ICBM152NLin2009\n\nFor quick quality control, the MNI template can be downsampled to 2mm iso.\nAxial, coronal and sagittal slices are captured.",
+            "keywords": [],
+            "category": "viz"
+        },
+        {
+            "name": "scil_connectivity_compare_populations.py",
+            "description": "Performs a network-based statistical comparison for populations g1 and g2. The\noutput is a matrix of the same size as the input connectivity matrices, with\np-values at each edge.\nAll input matrices must have the same shape (NxN). For paired t-test, both\ngroups must have the same number of observations.\n\nFor example, if you have streamline count weighted matrices for a MCI and a\ncontrol group and you want to investiguate differences in their connectomes:\n   >>> scil_connectivity_compare_populations.py pval.npy\n           --g1 MCI/*_sc.npy --g2 CTL/*_sc.npy\n\n--filtering_mask will simply multiply the binary mask to all input\nmatrices before performing the statistical comparison. Reduces the number of\nstatistical tests, useful when using --fdr or --bonferroni.\n\nFormerly: scil_compare_connectivity.py",
+            "keywords": [],
+            "category": "connectivity"
+        },
+        {
+            "name": "scil_json_harmonize_entries.py",
+            "description": "This script will harmonize a json file by adding missing keys and values\nthat differs between the different layers of the dictionary.\n\nThis is used only (for now) in Aggregate_All_* portion of tractometry-flow,\nto counter the problem of missing bundles/metrics/lesions between subjects.\n\nThe most common use case is when specific subjects have missing bundles\nwhich will cause a panda array to be incomplete, and thus crash. Finding out\nthe union of all bundles/metrics/lesions will allow to create a complete json\n(but with NaN for missing values).\n\nFormerly: scil_harmonize_json.py",
+            "keywords": [],
+            "category": "json"
+        },
+        {
+            "name": "scil_tractogram_convert.py",
+            "description": "Conversion of '.tck', '.trk', '.fib', '.vtk' and 'dpy' files using updated file\nformat standard. TRK file always needs a reference file, a NIFTI, for\nconversion. The FIB file format is in fact a VTK, MITK Diffusion supports it.\n\nFormerly: scil_convert_tractogram.py",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_bundle_filter_by_occurence.py",
+            "description": "Use multiple versions of a same bundle and detect the most probable voxels by\nusing a threshold on the occurence, voxel-wise. With threshold 0.5, this is\na majority vote. This is useful to generate an average representation from\nbundles of a given population.\n\nIf streamlines originate from the same tractogram (ex, to compare various\nbundle clustering techniques), streamline-wise vote is available to find the\nstreamlines most often included in the bundle.\n\nFormerly: scil_perform_majority_vote.py",
+            "keywords": [],
+            "category": "bundle"
+        },
+        {
+            "name": "scil_viz_volume_screenshot_mosaic.py",
+            "description": "Compose a mosaic of screenshots of the given image volume slices along the\nrequested axis. The provided transparency mask (e.g. a brain mask volume) is\nused to set the screenshot values outside the mask non-zero values to full\ntransparency. Additionally, if a labelmap image is provided (e.g. a tissue\nsegmentation map), it is overlaid on the volume slices. Also, a series of\nmasks can be provided and will be used to generate contours overlaid on each\nvolume slice.\n\nA labelmap image can be provided as the image volume, without requiring it as\nthe optional argument if only the former needs to be plot.\n\nThe screenshots are overlapped according to the given factors.\n\nThe mosaic supports either horizontal, vertical or matrix arrangements.\n\nExample:\n>>> scil_viz_volume_screenshot_mosaic.py 1 8 t1.nii.gz brain_mask.nii.gz\n    mosaic_overlap_t1_axial.png 30 40 50 60 70 80 90 100\n\n>>> scil_viz_volume_screenshot_mosaic.py 2 4 t1.nii.gz brain_mask.nii.gz\n    mosaic_overlap_t1_axial_plasma_cmap.png 30 40 50 60 70 80 90 100\n    --overlap_factor 0.6 0.5 --volume_cmap_name plasma\n\n>>> scil_viz_volume_screenshot_mosaic.py 2 4 tissues.nii.gz brain_mask.nii.gz\n    mosaic_overlap_tissues_axial_plasma_cmap.png 30 40 50 60 70 80 90 100\n    --volume_cmap_name plasma\n\n>>> scil_viz_volume_screenshot_mosaic.py 2 4 t1.nii.gz brain_mask.nii.gz\n    mosaic_overlap_t1_sagittal_tissue_viridis_cmap.png\n    30 40 50 60 70 80 90 100 --axis sagittal\n    --labelmap tissue_map.nii.gz --labelmap_cmap_name viridis\n\n>>> scil_viz_volume_screenshot_mosaic.py 2 4 t1.nii.gz brain_mask.nii.gz\n    mosaic_overlap_t1_sagittal_tissue_contours.png\n    30 40 50 60 70 80 90 100 --axis sagittal\n    --overlays wm_mask.nii.gz gm_mask.nii.gz csf_mask.nii.gz",
+            "keywords": [],
+            "category": "viz"
+        },
+        {
+            "name": "scil_tractogram_register.py",
+            "description": "Generate a linear transformation matrix from the registration of 2 tractograms.\nTypically, this script is run before scil_tractogram_apply_transform.py.\n\nFor more information on how to use the various registration scripts, see the\ndoc at:\nhttps://scilpy.readthedocs.io/en/latest/documentation/tractogram_registration.html\n\nFormerly: scil_register_tractogram.py",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_gradients_validate_correct_eddy.py",
+            "description": "Validate and correct gradients from eddy outputs\nWith full AP-PA eddy outputs a full bvec bval (2x nb of dirs and bval)\nthat doesnt fit with the output dwi (1x nb of dir)\n\nFormerly: scil_validate_and_correct_eddy_gradients.py",
+            "keywords": [],
+            "category": "gradients"
+        },
+        {
+            "name": "scil_viz_bundle_screenshot_mosaic.py",
+            "description": "Visualize bundles from a list. The script will output a mosaic (image) with\nscreenshots, 6 views per bundle in the list.",
+            "keywords": [],
+            "category": "viz"
+        },
+        {
+            "name": "scil_tractogram_compute_TODI.py",
+            "description": "Compute a Track Orientation Density Image (TODI).\n\nEach segment of the streamlines is weighted by its length (to support\ncompressed streamlines).\n\nThis script can afterwards output a Track Density Image (TDI) or a TODI with SF\nor SH representation, based on streamlines' segments.\n\nFormerly: scil_compute_todi.py",
+            "keywords": [
+                "track orientation density imaging",
+                "track density imaging",
+                "TDI"
+            ],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_viz_bingham_fit.py",
+            "description": "Visualize 2-dimensional Bingham volume slice loaded from disk. The volume is\nassumed to be saved from scil_fodf_to_bingham.py.\n\nGiven an image of Bingham coefficients, this script displays a slice in a\ngiven orientation.",
+            "keywords": [
+                "visualisation",
+                "bingham distributions",
+                "bingham odf"
+            ],
+            "category": "viz"
+        },
+        {
+            "name": "scil_header_validate_compatibility.py",
+            "description": "Will compare all input files against the first one for the compatibility\nof their spatial attributes.\n\nSpatial attributes are: affine, dimensions, voxel sizes and voxel order.\n\nFormerly: scil_verify_space_attributes_compatibility.py",
+            "keywords": [],
+            "category": "header"
+        },
+        {
+            "name": "scil_sh_fusion.py",
+            "description": "Merge a list of Spherical Harmonics files.\n\nThis merges the coefficients of multiple Spherical Harmonics files by taking,\nfor each coefficient, the one with the largest magnitude.\n\nCan be used to merge fODFs computed from different shells into 1, while\nconserving the most relevant information.\n\nBased on [1] and [2].\n\nFormerly: scil_merge_sh.py",
+            "keywords": [
+                "spherical harmonics",
+                "SH",
+                "fusion",
+                "largest magnitude",
+                "merge",
+                "coefficients"
+            ],
+            "category": "sh"
+        },
+        {
+            "name": "scil_bingham_metrics.py",
+            "description": "Script to compute fODF lobe-specific metrics derived from a Bingham\ndistribution fit, as described in [1]. Resulting metrics are fiber density\n(FD), fiber spread (FS) and fiber fraction (FF) [2].\n\nThe Bingham coefficients volume comes from scil_fodf_to_bingham.py.\n\nA lobe's FD is the integral of the Bingham function on the sphere. It\nrepresents the density of fibers going through a given voxel for a given\nfODF lobe (fixel). A lobe's FS is the ratio of its FD on its maximum AFD. It\nis at its minimum for a sharp lobe and at its maximum for a wide lobe. A lobe's\nFF is the ratio of its FD on the total FD in the voxel.\n\nUsing 12 threads, the execution takes 10 minutes for FD estimation for a brain\nwith 1mm isotropic resolution. Other metrics take less than a second.\n\nFormerly: scil_compute_lobe_specific_fodf_metrics.py",
+            "keywords": [
+                "fiber density",
+                "fiber spread",
+                "fiber fraction",
+                "fixel"
+            ],
+            "category": "bingham"
+        },
+        {
+            "name": "scil_volume_crop.py",
+            "description": "Crop a volume using a given or an automatically computed bounding box. If a\npreviously computed bounding box file is given, the cropping will be applied\nand the affine fixed accordingly.\n\nWarning: This works well on masked images (like with FSL-Bet) volumes since\nit's looking for non-zero data. Therefore, you should validate the results on\nother types of images that haven't been masked.\n\nFormerly: scil_crop_volume.py",
+            "keywords": [],
+            "category": "volume"
+        },
+        {
+            "name": "scil_connectivity_normalize.py",
+            "description": "Normalize a connectivity matrix coming from\nscil_tractogram_segment_bundles_for_connectivity.py.\n3 categories of normalization are available:\n-- Edge attributes\n - length: Multiply each edge by the average bundle length.\n   Compensate for far away connections when using interface seeding.\n   Cannot be used with inverse_length.\n\n - inverse_length: Divide each edge by the average bundle length.\n   Compensate for big connections when using white matter seeding.\n   Cannot be used with length.\n\n - bundle_volume: Divide each edge by the average bundle length.\n   Compensate for big connections when using white matter seeding.\n\n-- Node attributes (Mutually exclusive)\n - parcel_volume: Divide each edge by the sum of node volume.\n   Compensate for the likelihood of ending in the node.\n   Compensate seeding bias when using interface seeding.\n\n - parcel_surface: Divide each edge by the sum of the node surface.\n   Compensate for the likelihood of ending in the node.\n   Compensate for seeding bias when using interface seeding.\n\n-- Matrix scaling (Mutually exclusive)\n - max_at_one: Maximum value of the matrix will be set to one.\n - sum_to_one: Ensure the sum of all edges weight is one\n - log_10: Apply a base 10 logarithm to all edges weight\n\nThe volume and length matrix should come from the\nscil_tractogram_segment_bundles_for_connectivity.py script.\n\nA review of the type of normalization is available in:\nColon-Perez, Luis M., et al. \"Dimensionless, scale-invariant, edge weight\nmetric for the study of complex structural networks.\" PLOS one 10.7 (2015).\n\nHowever, the proposed weighting of edge presented in this publication is not\nimplemented.\n\nFormerly: scil_normalize_connectivity.py",
+            "keywords": [],
+            "category": "connectivity"
+        },
+        {
+            "name": "scil_fodf_max_in_ventricles.py",
+            "description": "Script to compute the maximum fODF in the ventricles. The ventricules are\nestimated from an MD and FA threshold.\n\nThis allows to clip the noise of fODF using an absolute thresold.\n\nFormerly: scil_compute_fodf_max_in_ventricles.py",
+            "keywords": [
+                "ventricles",
+                "maximum fODF",
+                "absolute threshold"
+            ],
+            "category": "fodf"
+        },
+        {
+            "name": "scil_sh_to_aodf.py",
+            "description": "Script to estimate asymmetric ODFs (aODFs) from a spherical harmonics image.\n\nTwo methods are available:\n    * Unified filtering [1] combines four asymmetric filtering methods into\n      a single equation and relies on a combination of four gaussian filters.\n    * Cosine filtering [2] is a simpler implementation using cosine distance\n      for assigning weights to neighbours.\n\nUnified filtering can be accelerated using OpenCL with the option --use_opencl.\nMake sure you have pyopencl installed before using this option. By default, the\nOpenCL program will run on the cpu. To use a gpu instead, also specify the\noption --device gpu.",
+            "keywords": [
+                "asymmetric",
+                "asymmetries",
+                "filtering",
+                "full basis"
+            ],
+            "category": "sh"
+        },
+        {
+            "name": "scil_surface_flip.py",
+            "description": "Script to flip a given surface (FreeSurfer or VTK supported).\n\nCan flip surface coordinates around a single or multiple axes\nCan also be used to reverse the orientation of the surface normals.\n\nFormerly: scil_flip_surface.py",
+            "keywords": [
+                "surface",
+                "mesh",
+                "vtk FreeSurfer"
+            ],
+            "category": "surface"
+        },
+        {
+            "name": "scil_volume_count_non_zero_voxels.py",
+            "description": "Count the number of non-zero voxels in an image file.\n\nIf you give it an image with more than 3 dimensions, it will summarize the 4th\n(or more) dimension to one voxel, and then find non-zero voxels over this.\nThis means that if there is at least one non-zero voxel in the 4th dimension,\nthis voxel of the 3D volume will be considered as non-zero.\n\nFormerly: scil_count_non_zero_voxels.py",
+            "keywords": [],
+            "category": "volume"
+        },
+        {
+            "name": "scil_tracking_pft_maps_edit.py",
+            "description": "Modify PFT maps to allow PFT tracking in given mask (e.g edema).\n\nFormerly: scil_add_tracking_mask_to_pft_maps.py.",
+            "keywords": [
+                "particule filtering tractography",
+                "cmc"
+            ],
+            "category": "tracking"
+        },
+        {
+            "name": "scil_header_print_info.py",
+            "description": "Print the raw header from the provided file or only the specified keys.\nSupport trk, nii and mgz files.\n\nFormerly: scil_print_header.py",
+            "keywords": [],
+            "category": "header"
+        },
+        {
+            "name": "scil_tracking_pft.py",
+            "description": "Local streamline HARDI tractography including Particle Filtering tracking.\n\nWARNING: This script DOES NOT support asymetric FODF input (aFODF).\n\nThe tracking is done inside partial volume estimation maps and uses the\nparticle filtering tractography (PFT) algorithm. See\nscil_tracking_pft_maps.py to generate PFT required maps.\n\nStreamlines longer than min_length and shorter than max_length are kept.\nThe tracking direction is chosen in the aperture cone defined by the\nprevious tracking direction and the angular constraint.\nDefault parameters as suggested in [1].\n\nAlgo 'det': the maxima of the spherical function (SF) the most closely aligned\nto the previous direction.\nAlgo 'prob': a direction drawn from the empirical distribution function defined\nfrom the SF.\n\nFor streamline compression, a rule of thumb is to set it to 0.1mm for the\ndeterministic algorithm and 0.2mm for probabilitic algorithm.\n\nAll the input nifti files must be in isotropic resolution.\n\nFormerly: scil_compute_pft.py",
+            "keywords": [
+                "particle filter tractography",
+                "continuous map criterion",
+                "tracking",
+                "fodf"
+            ],
+            "category": "tracking"
+        },
+        {
+            "name": "scil_bundle_mean_fixel_afd.py",
+            "description": "Compute the mean Apparent Fiber Density (AFD) and mean Radial fODF (radfODF)\nmaps along a bundle.\n\nThis is the \"real\" fixel-based fODF amplitude along every streamline\nof the bundle provided, averaged at every voxel.\n\nPlease use a bundle file rather than a whole tractogram.\n\nFormerly: scil_compute_fixel_afd_from_bundles.py",
+            "keywords": [],
+            "category": "bundle"
+        },
+        {
+            "name": "scil_bundle_uniformize_endpoints.py",
+            "description": "Uniformize streamlines' endpoints according to a defined axis.\nUseful for tractometry or models creation.\n\nThe --auto option will automatically calculate the main orientation.\nIf the input bundle is poorly defined, it is possible heuristic will be wrong.\n\nThe default is to flip each streamline so their first point's coordinate in the\ndefined axis is smaller than their last point (--swap does the opposite).\n\nThe --target_roi option will use the barycenter of the target mask to define\nthe axis. The target mask can be a binary mask or an atlas. If an atlas is\nused, labels are expected in the form of --target_roi atlas.nii.gz 2 3 5:7.\n\nFormerly: scil_uniformize_streamlines_endpoints.py",
+            "keywords": [],
+            "category": "bundle"
+        },
+        {
+            "name": "scil_btensor_metrics.py",
+            "description": "Script to compute microstructure metrics using the DIVIDE method. In order to\noperate, the script needs at leats two different types of b-tensor encodings.\nNote that custom encodings are not yet supported, so that only the linear\ntensor encoding (LTE, b_delta = 1), the planar tensor encoding\n(PTE, b_delta = -0.5), the spherical tensor encoding (STE, b_delta = 0) and\nthe cigar shape tensor encoding (b_delta = 0.5) are available. Moreover, all\nof `--in_dwis`, `--in_bvals`, `--in_bvecs` and `--in_bdeltas` must have the\nsame number of arguments. Be sure to keep the same order of encodings\nthroughout all these inputs and to set `--in_bdeltas` accordingly (IMPORTANT).\n\nBy default, will output all possible files, using default names. Thus, this\nscript outputs the results from the DIVIDE fit or direct derivatives:\nmean diffusivity (MD), isotropic mean kurtosis (mk_i), anisotropic mean\nkurtosis (mk_a), total mean kurtosis (mk_t) and finally micro-FA (uFA).\nSpecific names can be specified using the\nfile flags specified in the \"File flags\" section.\n\nIf --not_all is set, only the files specified explicitly by the flags\nwill be output. The order parameter can also be computed from the uFA and a\nprecomputed FA, using separate input parameters.\n\n>>> scil_btensor_metrics.py --in_dwis LTE.nii.gz PTE.nii.gz STE.nii.gz\n    --in_bvals LTE.bval PTE.bval STE.bval --in_bvecs LTE.bvec PTE.bvec STE.bvec\n    --in_bdeltas 1 -0.5 0 --mask mask.nii.gz\n\nIMPORTANT: If the script does not converge to a solution, it is probably due to\nnoise outside the brain. Thus, it is strongly recommanded to provide a brain\nmask with --mask.\n\nBased on Markus Nilsson, Filip Szczepankiewicz, Bj\u00f6rn Lampinen, Andr\u00e9 Ahlgren,\nJo\u00e3o P. de Almeida Martins, Samo Lasic, Carl-Fredrik Westin,\nand Daniel Topgaard. An open-source framework for analysis of multidimensional\ndiffusion MRI data implemented in MATLAB.\nProc. Intl. Soc. Mag. Reson. Med. (26), Paris, France, 2018.\n\nFormerly: scil_compute_divide.py",
+            "keywords": [
+                "b-tensor",
+                "b-tensor encoding",
+                "tensor-valued diffusion MRI",
+                "micro-FA",
+                "uFA",
+                "order parameter",
+                "OP",
+                "DIVIDE",
+                "microstructure",
+                "linear tensor encoding (LTE)",
+                "planar tensor encoding (PTE)",
+                "spherical tensor encoding (STE)",
+                "multidimensional diffusion MRI"
+            ],
+            "category": "btensor"
+        },
+        {
+            "name": "scil_gradients_generate_sampling.py",
+            "description": "Generate multi-shell gradient sampling with various processing options. Helps\naccelerate gradients, optimize duty cycle and avoid artefacts.\n\nMulti-shell gradient sampling is generated as in [1]. The bvecs are then\nflipped to maximize spread for eddy current correction, b0s are interleaved at\nequal spacing and the non-b0 samples are finally shuffled to minimize the total\ndiffusion gradient amplitude over a few TR.\n\nFormerly: scil_generate_gradient_sampling.py",
+            "keywords": [
+                "gradients",
+                "gradient table",
+                "sampling scheme",
+                "sampling",
+                "hardi",
+                "multi-shell",
+                "caruyer",
+                "optimized gradients"
+            ],
+            "category": "gradients"
+        },
+        {
+            "name": "scil_tractogram_remove_invalid.py",
+            "description": "Removal of streamlines that are out of the volume bounding box. In voxel space\nno negative coordinate and no above volume dimension coordinate are possible.\nAny streamline that do not respect these two conditions are removed.\n\nThe --cut_invalid option will cut streamlines so that their longest segment are\nwithin the bounding box\n\nFormerly: scil_remove_invalid_streamlines.py",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_fodf_to_bingham.py",
+            "description": "Script for fitting a Bingham distribution to each fODF lobe, as described\nin [1].\n\nThe Bingham fit is saved, with each Bingham distribution described by 7\ncoefficients (for example, for a maximum number of lobes of 5, the number\nof coefficients is 7 x 5 = 35 -- less than the number of coefficients for\nSH of maximum order 8).\n\nUsing 12 threads, the execution takes approximately 30 minutes for a brain with\n1mm isotropic resolution.\n\nFormerly: scil_fit_bingham_to_fodf.py",
+            "keywords": [
+                "lobe",
+                "lobe-specific",
+                "bingham-odf"
+            ],
+            "category": "fodf"
+        },
+        {
+            "name": "scil_tractogram_assign_uniform_color.py",
+            "description": "Assign an hexadecimal RGB color to one or more Trackvis (.trk) tractogram.\n(If called with .tck, the output will always be .trk, because data_per_point\nhas no equivalent in tck file.)\n\nSaves the RGB values in the data_per_point 'color' with values\n(color_x, color_y, color_z).\n\nThe hexadecimal RGB color should be formatted as 0xRRGGBB or \"#RRGGBB\".\n\nSee also: scil_tractogram_assign_custom_color.py\n\nFormerly: scil_assign_uniform_color_to_tractograms.py",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_tractogram_segment_bundles.py",
+            "description": "Compute BundleSeg & supports multi-atlas & multi-parameters (RBx-like).\nThe model needs to be cleaned and lightweight.\nTransform should come from ANTs: (using the --inverse flag)\nAntsRegistrationSyNQuick.sh -d 3 -m MODEL_REF -f SUBJ_REF\n\nIf you are not sure about the transformation 'direction' you can try\nscil_tractogram_segment_bundles.py (with the -v option), a warning will popup\nif the provided transformation is not used correctly.\n\nThe number of folders inside 'models_directories' will increase the number of\nruns. Each folder is considered like an atlas and bundles inside will initiate\nmore BundleSeg executions. The more atlases you have, the more robust the\nrecognition will be.\n\n--minimal_vote_ratio is a value between 0 and 1. If you have 5 input model\ndirectories and a minimal_vote_ratio of 0.5, you will need at least 3 votes\n\nExample data and usage available at: https://zenodo.org/record/7950602\n\nFor RAM usage, it is recommanded to use this heuristic:\n    (size of inputs tractogram (GB) * number of processes) < RAM (GB)\nThis is important because many instances of data structures are initialized\nin parallel and can lead to a RAM overflow.\n\nFormerly: scil_recognize_multi_bundles.py",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_connectivity_filter.py",
+            "description": "Script to facilitate filtering of connectivity matrices.\nThe same could be achieved through a complex sequence of\nscil_connectivity_math.py.\n\nCan be used with any connectivity matrix from\nscil_connectivity_compute_matrices.py.\n\nFor example, a simple filtering (Jasmeen style) would be:\nscil_connectivity_filter.py out_mask.npy\n    --greater_than */sc.npy 1 0.90\n    --lower_than */sim.npy 2 0.90\n    --greater_than */len.npy 40 0.90 -v;\n\nThis will result in a binary mask where each node with a value of 1 represents\na node with at least 90% of the population having at least 1 streamline,\n90% of the population is similar to the average (2mm) and 90% of the\npopulation having at least 40mm of average streamlines length.\n\nAll operation are stricly > or <, there is no >= or <=.\n\n--greater_than or --lower_than expect the same convention:\n    MATRICES_LIST VALUE_THR POPULATION_PERC\nIt is strongly recommended (but not enforced) that the same number of\nconnectivity matrices is used for each condition.\n\nThis script performs an intersection of all conditions, meaning that all\nconditions must be met in order not to be filtered.\nIf the user wants to manually handle the requirements, --keep_condition_count\ncan be used and manually binarized using scil_connectivity_math.py\n\nFormerly: scil_filter_connectivity.py",
+            "keywords": [],
+            "category": "connectivity"
+        },
+        {
+            "name": "scil_volume_flip.py",
+            "description": "Flip the volume according to the specified axis.\n\nFormerly: scil_flip_volume.py",
+            "keywords": [],
+            "category": "volume"
+        },
+        {
+            "name": "scil_dwi_extract_b0.py",
+            "description": "Extract B0s from DWI, based on the bval and bvec information.\n\nThe default behavior is to save the first b0 of the series.\n\nFormerly: scil_extract_b0.py",
+            "keywords": [
+                "b0 extraction",
+                "b0",
+                "b-value 0",
+                "extract"
+            ],
+            "category": "dwi"
+        },
+        {
+            "name": "scil_labels_split_volume_by_ids.py",
+            "description": "Split a label image into multiple images where the name of the output images\nis the id of the label (ex. 35.nii.gz, 36.nii.gz, ...). If the --range option\nis not provided, all labels of the image are extracted. The label 0 is\nconsidered as the background and is ignored.\n\nIMPORTANT: your label image must be of an integer type.\n\nFormerly: scil_split_volume_by_ids.py",
+            "keywords": [],
+            "category": "labels"
+        },
+        {
+            "name": "scil_tractogram_shuffle.py",
+            "description": "Shuffle the ordering of streamlines.\n\nFormerly: scil_shuffle_streamlines.py",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_tractogram_split.py",
+            "description": "Split a tractogram into multiple files, 2 options available :\nSplit into X files, or split into files of Y streamlines.\n\nBy default, streamlines to add to each chunk will be chosen randomly.\nOptionally, you can split streamlines...\n    - sequentially (the first n/nb_chunks streamlines in the first chunk and so\n     on).\n    - randomly, but per Quickbundles clusters.\n\nFormerly: scil_split_tractogram.py",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_stats_group_comparison.py",
+            "description": "Run group comparison statistics on metrics from tractometry\n1) Separate the sample given a particular variable (group_by) into groups\n\n2) Does Shapiro-Wilk test of normality for every sample\nhttps://en.wikipedia.org/wiki/Shapiro%E2%80%93Wilk_test\n\n3) Does Levene or Bartlett (depending on normality) test of variance\nhomogeneity Levene:\nhttps://www.itl.nist.gov/div898/handbook/eda/section3/eda35a.htm\nBartlett:\nhttps://www.itl.nist.gov/div898/handbook/eda/section3/eda357.htm\n\n4) Test the group difference for every measure with the correct test depending\n   on the sample (Student, Welch, Mannwhitneyu, ANOVA, Kruskall-Wallis)\nStudent :\nhttps://en.wikipedia.org/wiki/Student%27s_t-test#Independent_two-sample_t-test\nWelch :\nhttps://en.wikipedia.org/wiki/Welch%27s_t-test\nMann-Whitney U :\nhttps://en.wikipedia.org/wiki/Mann%E2%80%93Whitney_U_test\nANOVA :\nhttp://www.biostathandbook.com/onewayanova.html\nKruskall-Wallis :\nhttps://en.wikipedia.org/wiki/Kruskal%E2%80%93Wallis_one-way_analysis_of_variance\n\n\n5) If the group difference test is positive and number of group is greater than\n   2, test the group difference two by two.\n\n6) Generate the result for all metrics and bundles\n\nFormerly: scil_group_comparison.py",
+            "keywords": [],
+            "category": "stats"
+        },
+        {
+            "name": "scil_labels_dilate.py",
+            "description": "Dilate regions (with or without masking) from a labeled volume:\n- \"label_to_dilate\" are regions that will dilate over\n    \"label_to_fill\" if close enough to it (\"distance\").\n- \"label_to_dilate\", by default (None) will be all\n        non-\"label_to_fill\" and non-\"label_not_to_dilate\".\n- \"label_not_to_dilate\" will not be changed, but will not dilate.\n- \"mask\" is where the dilation is allowed (constrained)\n    in addition to \"background_label\" (logical AND)\n\n>>> scil_labels_dilate.py wmparc_t1.nii.gz wmparc_dil.nii.gz \\\n    --label_to_fill 0 5001 5002 \\\n    --label_not_to_dilate 4 43 10 11 12 49 50 51\n\nFormerly: scil_dilate_labels.py",
+            "keywords": [],
+            "category": "labels"
+        },
+        {
+            "name": "scil_frf_memsmt.py",
+            "description": "Script to estimate response functions for multi-encoding multi-shell\nmulti-tissue (memsmt) constrained spherical deconvolution. In order to operate,\nthe script only needs the data from one type of b-tensor encoding. However,\ngiving only a spherical one will not produce good fiber response functions, as\nit only probes spherical shapes. As for planar encoding, it should technically\nwork alone, but seems to be very sensitive to noise and is yet to be properly\ndocumented. We thus suggest to always use at least the linear encoding, which\nwill be equivalent to standard multi-shell multi-tissue if used alone, in\ncombinaison with other encodings. Note that custom encodings are not yet\nsupported, so that only the linear tensor encoding (LTE, b_delta = 1), the\nplanar tensor encoding (PTE, b_delta = -0.5), the spherical tensor encoding\n(STE, b_delta = 0) and the cigar shape tensor encoding (b_delta = 0.5) are\navailable. Moreover, all of `--in_dwis`, `--in_bvals`, `--in_bvecs` and\n`--in_bdeltas` must have the same number of arguments. Be sure to keep the\nsame order of encodings throughout all these inputs and to set `--in_bdeltas`\naccordingly (IMPORTANT).\n\nThe script computes a response function for white-matter (wm),\ngray-matter (gm), csf and the mean b=0.\n\nIn the wm, we compute the response function in each voxels where\nthe FA is superior at threshold_fa_wm.\n\nIn the gm (or csf), we compute the response function in each voxels where\nthe FA is below at threshold_fa_gm (or threshold_fa_csf) and where\nthe MD is below threshold_md_gm (or threshold_md_csf).\n\n>>> scil_frf_memsmt.py wm_frf.txt gm_frf.txt csf_frf.txt --in_dwis LTE.nii.gz\n    PTE.nii.gz STE.nii.gz --in_bvals LTE.bval PTE.bval STE.bval --in_bvecs\n    LTE.bvec PTE.bvec STE.bvec --in_bdeltas 1 -0.5 0 --mask mask.nii.gz\n\nBased on P. Karan et al., Bridging the gap between constrained spherical\ndeconvolution and diffusional variance decomposition via tensor-valued\ndiffusion MRI. Medical Image Analysis (2022)\n\nFormerly: scil_compute_memsmt_frf.py",
+            "keywords": [
+                "fiber response function",
+                "response function",
+                "RF",
+                "FRF",
+                "b-tensor",
+                "b-tensor encoding",
+                "multi-encoding",
+                "multi-shell",
+                "multi-tissue",
+                "memsmt",
+                "linear tensor encoding (LTE)",
+                "planar tensor encoding (PTE)",
+                "spherical tensor encoding (STE)",
+                "multidimensional diffusion MRI"
+            ],
+            "category": "frf"
+        },
+        {
+            "name": "scil_freewater_priors.py",
+            "description": "Synonym for scil_NODDI_priors.py",
+            "keywords": [],
+            "category": "freewater"
+        },
+        {
+            "name": "scil_volume_apply_transform.py",
+            "description": "Transform Nifti (.nii.gz) using an affine/rigid transformation.\n\nFor more information on how to use the registration script, follow this link:\nhttps://scilpy.readthedocs.io/en/latest/documentation/tractogram_registration.html\n\nFormerly: scil_apply_transform_to_image.py.",
+            "keywords": [],
+            "category": "volume"
+        },
+        {
+            "name": "scil_bundle_compute_endpoints_map.py",
+            "description": "Computes the endpoint map of a bundle. The endpoint map is simply a count of\nthe number of streamlines that start or end in each voxel.\n\nThe idea is to estimate the cortical area affected by the bundle (assuming\nstreamlines start/end in the cortex).\n\nNote: If the streamlines are not ordered the head/tail are random and not\nreally two coherent groups. Use the following script to order streamlines:\nscil_tractogram_uniformize_endpoints.py\n\nFormerly: scil_compute_endpoints_map.py",
+            "keywords": [],
+            "category": "bundle"
+        },
+        {
+            "name": "scil_tractogram_segment_and_score.py",
+            "description": "Scores input tractogram overall and bundlewise.\n\nOutputs\n-------\n\n    - results.json: Contains a full tractometry report.\n    - processing_stats.json: Contains information on the segmentation of\n    bundles (ex: the number of wpc per criteria).\n    - Splits the input tractogram into\n        segmented_VB/*_VS.trk.\n        segmented_IB/*_*_IC.trk   (if args.compute_ic)\n        segmented_WPC/*_wpc.trk  (if args.save_wpc_separately)\n        IS.trk     OR      NC.trk  (if args.compute_ic)\n\nBy default, if a streamline fits in many bundles, it will be included in every\none. This means a streamline may be a VS for a bundle and an IS for\n(potentially many) others. If you want to assign each streamline to at most one\nbundle, use the `--unique` flag.\n\nConfig file\n-----------\n\nThe config file needs to be a json containing a dict of the ground-truth\nbundles as keys. The value for each bundle is itself a dictionnary with:\n\nMandatory:\n    - endpoints OR [head AND tail]: filename for the endpoints ROI.\n        If 'enpoints' is used, we will automatically separate the mask into two\n        ROIs, acting as head and tail. Quality check is strongly recommended.\n\nOptional:\n    Concerning metrics:\n    - gt_mask: expected result. OL and OR metrics will be computed from this.*\n\n    Concerning inclusion criteria (other streamlines will be WPC):\n    - all_mask: ROI serving as \"all\" criteria: to be included in the bundle,\n        ALL points of a streamline must be inside the mask.*\n    - any_mask: ROI serving as \"any\" criteria: streamlines\n        must touch that mask in at least one point (\"any\" point) to be included\n        in the bundle.\n    - angle: angle criteria. Streamlines containing loops and sharp turns above\n        given angle will be rejected from the bundle.\n    - length: maximum and minimum lengths per bundle.\n    - length_x / length_x_abs: maximum and minimum total distance in the x\n        direction (i.e. first coordinate).**\n    - length_y / length_y_abs: maximum and minimum total distance in the y\n        direction (i.e. second coordinate).**\n    - length_z / length_z_abs: maximum and minimum total distance in the z\n        direction (i.e. third coordinate).**\n\n* Files must be .tck, .trk, .nii or .nii.gz. If it is a tractogram, a mask will\nbe created. If it is a nifti file, it will be considered to be a mask.\n** With absolute values: coming back on yourself will contribute to the total\ndistance instead of cancelling it.\n\nExemple config file:\n{\n  \"Ground_truth_bundle_0\": {\n    \"gt_mask\": \"PATH/bundle0.nii.gz\",\n    \"angle\": 300,\n    \"length\": [140, 150],\n    \"endpoints\": \"PATH/file1.nii.gz\"\n  }\n}",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_labels_combine.py",
+            "description": "Script to combine labels from multiple volumes. If there is overlap, it will\noverwrite them based on the input order.\n\n    >>> scil_labels_combine.py out_labels.nii.gz\n            --volume_ids animal_labels.nii 20\n            --volume_ids DKT_labels.nii.gz 44 53\n            --out_labels_indices 20 44 53\n    >>> scil_labels_combine.py slf_labels.nii.gz\n            --volume_ids a2009s_aseg.nii.gz all\n            --volume_ids clean/s1__DKT.nii.gz 1028 2028\n\nFormerly: scil_combine_labels.py.",
+            "keywords": [],
+            "category": "labels"
+        },
+        {
+            "name": "scil_tractogram_filter_by_anatomy.py",
+            "description": "This script filters streamlines in a tractogram according to their geometrical\nproperties (i.e. limiting their length and looping angle) and their anatomical\nending properties (i.e. the anatomical tissue or region their endpoints lie\nin).\n\nSee also:\n    - scil_tractogram_detect_loops.py\n    - scil_tractogram_filter_by_length.py\n    - scil_tractogram_filter_by_orientation.py\n    - scil_tractogram_filter_by_roi.py\n\nThe filtering is performed sequentially in four steps, each step processing the\ndata on the output of the previous step:\n\n    Step 1 - Remove streamlines below the minimum length and above the\n             maximum length. These thresholds must be set with the ``--minL``\n             and ``--maxL`` options.\n    Step 2 - Ensure that no streamlines end in the cerebrospinal fluid\n             according to the provided parcellation. A binary mask can be used\n             alternatively through the ``--csf_bin`` option.\n    Step 3 - Ensure that no streamlines end in white matter by ensuring that\n             they reach the cortical regions according to the provided\n             parcellation. The cortical regions of the parcellation can be\n             dilated using the ``--ctx_dilation_radius``.\n    Step 4 - Remove streamlines if they make a loop with an angle above a\n             certain threshold. It's possible to change this angle with the\n             ``-a`` option.\n\nLength and loop-based filtering (steps 1 and 2) will not have practical effects\nif no specific thresholds are provided (but will be still executed), since\ndefault values are 0 for the minimum allowed length and infinite for the\nmaximum allowed length and angle.\n\nThe anatomical region endings filtering requires a parcellation or label image\nfile including the cerebrospinal fluid and gray matter (cortical) regions\naccording to the Desikan-Killiany atlas. Intermediate tractograms (results of\neach step and outliers) and volumes can be saved throughout the process.\n\nExample usages:\n\n# Filter length, looping angle and anatomical ending region\n>>> scil_tractogram_filter_by_anatomy.py tractogram.trk wmparc.nii.gz\n    path/to/output/directory --minL 20 --maxL 200 -a 300\n# Filter only anatomical ending region, with WM dilation and provided csf mask\n>>> scil_tractogram_filter_by_anatomy.py tractogram.trk wmparc.nii.gz\n    path/to/output/directory --csf_bin csf_bin.nii.gz --ctx_dilation_radius 2\n\nFormerly: scil_filter_streamlines_anatomically.py\n\nNOTE: As of version 2.0.0, the dilation of the cortical mask has changed; from\nan in-house process to scipy's dilation. Results may differ from previous\nversions.",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_tractogram_print_info.py",
+            "description": "Prints information on a loaded tractogram: number of streamlines, and\nmean / min / max / std of\n    - length in number of points\n    - length in mm\n    - step size.\n\nFor trk files: also prints the data_per_point and data_per_streamline keys.\n\nSee also:\n    - scil_header_print_info.py to see the header, affine, volume dimension.\n    - scil_bundle_shape_measures.py to see bundle-specific information.",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_mti_maps_MT.py",
+            "description": "This script computes two myelin indices maps from the Magnetization Transfer\n(MT) images.\nMagnetization Transfer is a contrast mechanism in tissue resulting from the\nproton exchange between non-aqueous protons (from macromolecules and their\nclosely associated water molecules, the \"bound\" pool) and protons in the free\nwater pool called aqueous protons. This exchange attenuates the MRI signal,\nintroducing microstructure-dependent contrast. MT's effect reflects the\nrelative density of macromolecules such as proteins and lipids, it has been\nassociated with myelin content in white matter of the brain.\n\nDifferent contrasts can be done with an off-resonance pulse to saturating the\nprotons on non-aqueous molecules a frequency irradiation. The MT maps are\nobtained using three or four contrasts: a single positive frequency image\nand/or a single negative frequency image, and two unsaturated contrasts as\nreference. These two references should be acquired with predominant PD\n(proton density) and T1 weighting at different excitation flip angles\n(a_PD, a_T1) and repetition times (TR_PD, TR_T1).\n\n\nInput Data recommendation:\n  - it is recommended to use dcm2niix (v1.0.20200331) to convert data\n    https://github.com/rordenlab/dcm2niix/releases/tag/v1.0.20200331\n  - dcm2niix conversion will create all echo files for each contrast and\n    corresponding json files\n  - all input must have a matching json file with the same filename\n  - all contrasts must have a same number of echoes and coregistered\n    between them before running the script.\n  - Mask must be coregistered to the echo images\n  - ANTs can be used for the registration steps (http://stnava.github.io/ANTs/)\n\n\nThe output consists of a MT_native_maps folder containing the 2 myelin maps:\n    - MTR.nii.gz : Magnetization Transfer Ratio map\n    The MT ratio is a measure reflecting the amount of bound protons.\n    - MTsat.nii.gz : Magnetization Transfer saturation map\n    The MT saturation is a pseudo-quantitative maps representing\n    the signal change between the bound and free water pools.\n\nAs an option, the Complementary_maps folder contains the following images:\n    - positive.nii.gz : single positive frequency image\n    - negative.nii.gz : single negative frequency image\n    - mtoff_PD.nii.gz : unsaturated proton density weighted image\n    - mtoff_T1.nii.gz : unsaturated T1 weighted image\n    - MTsat_sp.nii.gz : MTsat computed from the single positive frequency image\n    - MTsat_sn.nii.gz : MTsat computed from the single negative frequency image\n    - R1app.nii.gz : Apparent R1 map computed for MTsat.\n    - B1_map.nii.gz : B1 map after correction and smoothing (if given).\n\n\nThe final maps from MT_native_maps can be corrected for B1+ field\n  inhomogeneity, using either an empiric method with\n  --in_B1_map option, suffix *B1_corrected is added for each map.\n  --B1_correction_method empiric\n  or a model-based method with\n  --in_B1_map option, suffix *B1_corrected is added for each map.\n  --B1_correction_method model_based\n  --B1_fitValues 1 or 2 .mat files, obtained externally from\n    https://github.com/TardifLab/OptimizeIHMTimaging/tree/master/b1Correction,\n    and given in this order: positive frequency saturation, negative frequency\n    saturation.\nFor both methods, the nominal value of the B1 map can be set with\n  --B1_nominal value\n\n\n>>> scil_mti_maps_MT.py path/to/output/directory\n    --in_mtoff_pd path/to/echo*mtoff.nii.gz\n    --in_positive path/to/echo*pos.nii.gz --in_negative path/to/echo*neg.nii.gz\n    --in_mtoff_t1 path/to/echo*T1w.nii.gz --mask path/to/mask_bin.nii.gz\n    --in_jsons path/to/echo*mtoff.json path/to/echo*T1w.json\n\nBy default, the script uses all the echoes available in the input folder.\nIf you want to use a single echo, replace the * with the specific number of\nthe echo.",
+            "keywords": [
+                "MTI",
+                "magnetization transfer",
+                "MT",
+                "MTR",
+                "MTsat",
+                "myelin"
+            ],
+            "category": "mti"
+        },
+        {
+            "name": "scil_tractogram_smooth.py",
+            "description": "This script will smooth the streamlines, usually to remove the 'wiggles' in\nprobabilistic tracking.\n\nTwo choices of methods are available:\n- Gaussian will use the surrounding coordinates for smoothing. Streamlines are\nresampled to 1mm step-size and the smoothing is performed on the coordinate\narray. The sigma will be indicative of the  number of points surrounding the\ncenter points to be used for blurring.\n- Spline will fit a spline curve to every streamline using a sigma and the\nnumber of control points. The sigma represents the allowed distance from the\ncontrol points. The final streamlines are obtained by evaluating the spline at\nconstant intervals so that it will have the same number of points as initially.\n\nThis script enforces endpoints to remain the same.\n\nWARNING:\n- too low of a sigma (e.g: 1) with a lot of control points (e.g: 15)\nwill create crazy streamlines that could end up out of the bounding box.\n- data_per_point will be lost.\n\nFormerly: scil_smooth_streamlines.py",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_tractogram_apply_transform_to_hdf5.py",
+            "description": "Transform tractogram(s) contained in the hdf5 output from a connectivity\nscript, using an affine/rigid transformation and nonlinear deformation\n(optional).\n\nSee scil_tractogram_apply_transform.py to apply directly to a tractogram.\n\nFor more information on how to use the registration script, follow this link:\nhttps://scilpy.readthedocs.io/en/latest/documentation/tractogram_registration.html\n\nOr use >> scil_tractogram_apply_transform.py --help\n\nFormerly: scil_apply_transform_to_hdf5.py",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_bundle_score_same_bundle_many_segmentations.py",
+            "description": "This script is intended to score many versions of a same bundle, compared to\nONE ground truth / gold standard.\n\nSee also scil_bundle_score_many_bundles_one_tractogram.py to score all bundles\nfrom a single tractogram by comparing each valid bundle to its ground truth.\n\nAll tractograms must be in the same space (aligned to one reference).\nThe measures can be applied to a voxel-wise or streamline-wise representation.\n\nA gold standard must be provided for the desired representation.\nA gold standard would be a segmentation from an expert or a group of experts.\nIf only the streamline-wise representation is provided without a voxel-wise\ngold standard, it will be computed from the provided streamlines.\nAt least one of the two representations is required.\n\nThe gold standard tractogram is the tractogram (whole brain most likely) from\nwhich the segmentation is performed.\nThe gold standard tracking mask is the tracking mask used by the tractography\nalgorighm to generate the gold standard tractogram.\n\nThe computed binary classification measures are:\nsensitivity, specificity, precision, accuracy, dice, kappa, youden for both\nthe streamline and voxel representation (if provided).\n\nFormerly: scil_evaluate_bundles_binary_classification_measures.py",
+            "keywords": [],
+            "category": "bundle"
+        },
+        {
+            "name": "scil_frf_msmt.py",
+            "description": "Compute response functions for multi-shell multi-tissue (MSMT) constrained\nspherical deconvolution from DWI data.\n\nThe script computes a response function for white-matter (wm),\ngray-matter (gm), csf and the mean b=0.\n    - In the wm, we compute the response function in each voxel where the FA is\n      superior at threshold_fa_wm.\n    - In the gm (or csf), we compute the response function in each voxel where\n      the FA is below at threshold_fa_gm (or threshold_fa_csf) and where the MD\n      is below threshold_md_gm (or threshold_md_csf).\n\nWe output one response function file for each tissue, containing the response\nfunction for each b-value (arranged by lines). These are saved as the diagonal\nof the axis-symmetric diffusion tensor (3 e-values) and a mean b0 value.\nFor example, a typical wm_frf is [15e-4, 4e-4, 4e-4, 700], where the tensor\ne-values are (15,4,4)x10^-4 mm^2/s and the mean b0 is 700.\n\nBased on B. Jeurissen et al., Multi-tissue constrained spherical deconvolution\nfor improved analysis of multi-shell diffusion MRI data. Neuroimage (2014)\n\nFormerly: scil_compute_msmt_frf.py",
+            "keywords": [
+                "fiber response function",
+                "response function",
+                "RF",
+                "FRF",
+                "multi-shell",
+                "multi-tissue",
+                "msmt"
+            ],
+            "category": "frf"
+        },
+        {
+            "name": "scil_bundle_volume_per_label.py",
+            "description": "Compute bundle volume per label in mm3. This script supports anisotropic voxels\nresolution. Volume is estimated by counting the number of voxel occupied by\neach label and multiplying it by the volume of a single voxel.\n\nThe labels can be obtained by scil_bundle_label_map.py.\n\nThis estimation is typically performed at resolution around 1mm3.\n\nTo get the volume and other measures directly from the (whole) bundle, use\nscil_bundle_shape_measures.py.\n\nFormerly: scil_compute_bundle_volume_per_label.py",
+            "keywords": [],
+            "category": "bundle"
+        },
+        {
+            "name": "scil_mti_adjust_B1_header.py",
+            "description": "Correct B1 map header problem, by applying the scaling (slope) and setting\nthe slope to 1.",
+            "keywords": [
+                "MTI",
+                "magnetization transfer",
+                "MT",
+                "B1 map",
+                "header",
+                "B1"
+            ],
+            "category": "mti"
+        },
+        {
+            "name": "scil_volume_stats_in_ROI.py",
+            "description": "Compute the statistics (mean, std) of scalar maps, which can represent\ndiffusion metrics, in a ROI. Prints the results.\n\nThe mask can either be a binary mask, or a weighting mask. If the mask is\na weighting mask it should either contain floats between 0 and 1 or should be\nnormalized with --normalize_weights. IMPORTANT: if the mask contains weights\n(and not 0 and 1 exclusively), the standard deviation will also be weighted.",
+            "keywords": [],
+            "category": "volume"
+        },
+        {
+            "name": "scil_tractogram_count_streamlines.py",
+            "description": "Return the number of streamlines in a tractogram. Only support trk and tck in\norder to support the lazy loading from nibabel.\n\nFormerly: scil_count_streamlines.py",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_tractogram_flip.py",
+            "description": "Flip streamlines locally around specific axes.\n\nIMPORTANT: this script should only be used in case of absolute necessity.\nIt's better to fix the real tools than to force flipping streamlines to\nhave them fit in the tools.\n\nFormerly: scil_flip_streamlines.py",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_tractogram_compress.py",
+            "description": "Compress tractogram by removing collinear (or almost) points.\n\nThe compression threshold represents the maximum distance (in mm) to the\noriginal position of the point.\n\nFormerly: scil_compress_streamlines.py",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_surface_convert.py",
+            "description": "Script to convert surface formats\n\nSupported formats:\n    \".vtk\", \".vtp\", \".ply\", \".stl\", \".xml\", \".obj\"\n    and FreeSurfer surfaces\n\n> scil_surface_convert.py surf.vtk converted_surf.ply\n\nFormerly: scil_convert_surface.py",
+            "keywords": [
+                "surface",
+                "mesh",
+                "vtk FreeSurfer"
+            ],
+            "category": "surface"
+        },
+        {
+            "name": "scil_lesions_info.py",
+            "description": "This script will output informations about lesion load in bundle(s).\nThe input can either be streamlines, binary bundle map, or a bundle voxel\nlabel map.\n\nTo be considered a valid lesion, the lesion volume must be at least\nmin_lesion_vol mm3. This avoid the detection of thousand of single voxel\nlesions if an automatic lesion segmentation tool is used.\n\nFormerly: scil_analyse_lesions_load.py",
+            "keywords": [],
+            "category": "lesions"
+        },
+        {
+            "name": "scil_tractogram_segment_one_bundle.py",
+            "description": "Compute a simple Recobundles (single-atlas & single-parameters).\nThe model need to be cleaned and lightweight.\nTransform should come from ANTs: (using the --inverse flag)\nAntsRegistrationSyNQuick.sh -d 3 -m MODEL_REF -f SUBJ_REF\n\nIf you are unsure about the transformation 'direction' use the verbose\noption (-v) and try with and without the --inverse flag. If you are not using\nthe right transformation 'direction' a warning will popup. If there is no\nwarning in both case it means the transformation is very close to identity and\nboth 'direction' will work.\n\nFormerly: scil_recognize_single_bundles.py",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_volume_remove_outliers_ransac.py",
+            "description": "Remove outliers from image using the RANSAC algorithm.\nThe RANSAC algorithm parameters are sensitive to the input data.\n\nNOTE: Current default parameters are tuned for ad/md/rd images only.\n\nFormerly: scil_remove_outliers_ransac.py",
+            "keywords": [],
+            "category": "volume"
+        },
+        {
+            "name": "scil_tractogram_convert_hdf5_to_trk.py",
+            "description": "Save connections of a hdf5 created with\n>> scil_tractogram_segment_bundles_for_connectivity.py.\n\nUseful for quality control and visual inspections.\n\nIt can either save all connections (default), individual connections specified\nwith --edge_keys or connections from specific nodes specified with --node_keys.\n\nWith the option --save_empty, a label_lists, as a txt file, must be provided.\nThis option saves existing connections and empty connections.\n\nThe output is a directory containing the thousands of connections:\nout_dir/\n    |-- LABEL1_LABEL1.trk\n    |-- LABEL1_LABEL2.trk\n    |-- [...]\n    |-- LABEL90_LABEL90.trk\n\nFormerly: scil_save_connections_from_hdf5.py",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_dwi_to_sh.py",
+            "description": "Script to compute the SH coefficient directly on the raw DWI signal.\n\nFormerly: scil_compute_sh_from_signal.py",
+            "keywords": [
+                "signal",
+                "spherical harmonics"
+            ],
+            "category": "dwi"
+        },
+        {
+            "name": "scil_sh_to_rish.py",
+            "description": "Compute the RISH (Rotationally Invariant Spherical Harmonics) features of an SH\nsignal [1].\n\nEach RISH feature map is the total energy of its associated order.\nMathematically, it is the sum of the squared SH coefficients of the SH order.\n\nThis script supports both symmetrical and asymmetrical SH images as input, of\nany SH order.\n\nEach RISH feature will be saved as a separate file.\n\n[1] Mirzaalian, Hengameh, et al. \"Harmonizing diffusion MRI data across\nmultiple sites and scanners.\" MICCAI 2015.\nhttps://scholar.harvard.edu/files/hengameh/files/miccai2015.pdf\n\nFormerly: scil_compute_rish_from_sh.py",
+            "keywords": [
+                "rotation invariant spherical harmonics",
+                "features"
+            ],
+            "category": "sh"
+        },
+        {
+            "name": "scil_tractogram_project_streamlines_to_map.py",
+            "description": "Projects metrics onto the underlying voxels of a streamlines. This script can\nproject data from data_per_point (dpp) or data_per_streamline (dps) to maps.\n\nYou choose to project data from all points of the streamlines, or from the\nendpoints only. The idea then is to visualize the cortical areas affected by\nmetrics (assuming streamlines start/end in the cortex).\n\nSee also scil_tractogram_project_map_to_streamlines.py for the reverse action.\n\nHow to the data is loaded:\n    - From dps: uses the same value for each point of the streamline.\n    - From dpp: one value per point.\n\nHow the data is used:\n    1. Average all points of the streamline to get a mean value, set this value\n       to all points.\n    2. Average the two endpoints and get their mean value, set this value to\n       all points.\n    3. Keep each point individually.\n\nHow the data is projected to a map:\n    A. Using each point.\n    B. Using the endpoints only.\n\nFor more complex operations than the average per streamline, see\nscil_tractogram_dpp_math.py.",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_connectivity_reorder_rois.py",
+            "description": "Re-order one or many connectivity matrices using a text file format.\nThe first row are the (x) and the second row the (y), must be space separated.\nThe resulting matrix does not have to be square (support unequal number of\nx and y).\n\nThe values refer to the coordinates (starting at 0) in the matrix, but if the\n--labels_list parameter is used, the values will refer to the label which will\nbe converted to the appropriate coordinates. This file must be the same as the\none provided to the scil_tractogram_segment_bundles_for_connectivity.py.\n\nTo subsequently use scil_visualize_connectivity.py with a lookup table, you\nmust use a label-based reording json and use --labels_list.\n\nYou can also use the Optimal Leaf Ordering(OLO) algorithm to transform a\nsparse matrix into an ordering that reduces the matrix bandwidth. The output\nfile can then be re-used with --in_ordering. Only one input can be used with\nthis option, we recommand an average streamline count or volume matrix.\n\nFormerly: scil_reorder_connectivity.py",
+            "keywords": [],
+            "category": "connectivity"
+        },
+        {
+            "name": "scil_tractogram_seed_density_map.py",
+            "description": "Compute a density map of seeds saved in .trk file.\n\nFormerly: scil_compute_seed_density_map.py",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_viz_bundle.py",
+            "description": "Visualize bundles.\n\nExample usages:\n\n# Visualize streamlines as tubes, each bundle with a different color\n>>> scil_viz_bundle.py path_to_bundles/ --shape tube --random_coloring 1337\n\n# Visualize a tractogram with each streamlines drawn as lines, colored with\n# their local orientation, but only load 1 in 10 streamlines\n>>> scil_viz_bundle.py tractogram.trk --shape line --subsample 10\n\n# Visualize CSTs as large tubes and color them from a list of colors in a file\n>>> scil_viz_bundle.py path_to_bundles/CST_* --width 0.5\n    --color_dict colors.json",
+            "keywords": [
+                "visualisation",
+                "bundle",
+                "tractogram",
+                "streamlines"
+            ],
+            "category": "viz"
+        },
+        {
+            "name": "scil_dwi_extract_shell.py",
+            "description": "Extracts the DWI volumes that are on specific b-value shells. Many shells\ncan be extracted at once by specifying multiple b-values. The extracted\nvolumes are in the same order as in the original file.\n\nIf the b-values of a shell are not all identical, use the --tolerance\nargument to adjust the accepted interval. For example, a b-value of 2000\nand a tolerance of 20 will extract all volumes with a b-values from 1980 to\n2020.\n\nFiles that are too large to be loaded in memory can still be processed by\nsetting the --block-size argument. A block size of X means that X DWI volumes\nare loaded at a time for processing.\n\nFormerly: scil_extract_dwi_shell.py",
+            "keywords": [
+                "shell extraction",
+                "b-value extraction",
+                "DWI",
+                "shell/b-value selection",
+                "extract",
+                "DWI split",
+                "DWI splitting",
+                "multiple shells"
+            ],
+            "category": "dwi"
+        },
+        {
+            "name": "scil_connectivity_math.py",
+            "description": "Performs an operation on a list of matrices. The supported operations are\nlisted below.\n\nSome operations such as multiplication or addition accept float value as\nparameters instead of matrices.\n> scil_connectivity_math.py multiplication mat.npy 10 mult_10.npy",
+            "keywords": [],
+            "category": "connectivity"
+        },
+        {
+            "name": "scil_volume_resample.py",
+            "description": "Script to resample a dataset to match the resolution of another\nreference dataset or to the resolution specified as in argument.\n\nFormerly: scil_resample_volume.py",
+            "keywords": [],
+            "category": "volume"
+        },
+        {
+            "name": "scil_tractogram_qbx.py",
+            "description": "Compute clusters using QuickBundlesX and save them separately.\nWe cannot know the number of clusters in advance.\n\nQuickbundles:\nGaryfallidis, E. et al. (2012). Quickbundles, a method for tractography\nsimplification. Frontiers in neuroscience, 6, 175.\n\nQuickbundlesX:\nGaryfallidis, E. et al. (2016) QuickBundlesX: sequential clustering of millions\nof streamlines in multiple levels of detail at record execution time. 24th\nInternational Society of Magnetic Resonance in Medicine (ISMRM).\n\n\"QuickBundlesX shows a remarkable 20+X speedup over its predecessor\"\n\nFormerly: scil_compute_qbx.py",
+            "keywords": [
+                "clustering"
+            ],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_rgb_convert.py",
+            "description": "Converts a RGB image encoded as a 4D image to a RGB image encoded as\na 3D image, or vice versa.\n\nTypically, most software tools used in the SCIL (including MI-Brain) use\nthe former, while Trackvis uses the latter.\n\nInput\n-Case 1: 4D image where the 4th dimension contains 3 values.\n-Case 2: 3D image, in Trackvis format where each voxel contains a\n         tuple of 3 elements, one for each value.\n\nOutput\n-Case 1: 3D image, in Trackvis format where each voxel contains a\n         tuple of 3 elements, one for each value (uint8).\n-Case 2: 4D image where the 4th dimension contains 3 values (uint8).\n\nFormerly: scil_convert_rgb.py",
+            "keywords": [],
+            "category": "rgb"
+        },
+        {
+            "name": "scil_tractogram_math.py",
+            "description": "Performs an operation on a list of streamline files. The supported\noperations are:\n\ndifference:  Keep the streamlines from the first file that are not in\n                any of the following files.\n\nintersection: Keep the streamlines that are present in all files.\n\nunion:        Keep all streamlines while removing duplicates.\n\nconcatenate:  Keep all streamlines with duplicates.\n\nlazy_concatenate:  Keep all streamlines with duplicates, never load the whole\n                    tractograms in memory. Only works with trk/tck file,\n                    metadata will be lost and invalid streamlines are kept.\n\nIf a file 'duplicate.trk' have identical streamlines, calling the script using\nthe difference/intersection/union with a single input will remove these\nduplicated streamlines.\n\nTo allow a soft match, use the --precision option to increase the allowed\nthreshold for similarity. A precision of 1 represents 10**(-1), so a\nmaximum distance of 0.1mm is allowed. If the streamlines are identical, the\ndefault value of 3 (or 0.001mm distance) should work.\n\nIf there is a 0.5mm shift, use a precision of 0 (or 1mm distance) and the\n--robust option. Should make it work, but slightly slower. Will merge all\nstreamlines similar when rounded to that precision level.\n\nThe metadata (data per point, data per streamline) of the streamlines that\nare kept in the output will be preserved. This requires that all input files\nshare the same type of metadata. If this is not the case, use the option\n--no_metadata to strip the metadata from the output. Or --fake_metadata to\ninitialize dummy metadata in the file missing them.\n\nFormerly: scil_streamlines_math.py",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_qball_metrics.py",
+            "description": "Script to compute the Constant Solid Angle (CSA) or Analytical Q-ball model,\nthe generalized fractional anisotropy (GFA) and the peaks of the model.\n\nBy default, will output all possible files, using default names. Specific names\ncan be specified using the file flags specified in the \"File flags\" section.\n\nIf --not_all is set, only the files specified explicitly by the flags will be\noutput.\n\nSee [Descoteaux et al MRM 2007, Aganj et al MRM 2009] for details and\n[Cote et al MEDIA 2013] for quantitative comparisons.\n\nFormerly: scil_compute_qball_metrics.py",
+            "keywords": [
+                "CSA",
+                "QBI",
+                "q-ball imaging",
+                "diffusion odf"
+            ],
+            "category": "qball"
+        },
+        {
+            "name": "scil_json_merge_entries.py",
+            "description": "Merge multiple json files into a single one.\nTypically used during the tractometry pipeline.\n\nWithout option it will simply merge all entries at the top level, the top\nlevel must not have any conflicting keys.\n\n--keep_separate option will add a parent for each file, its basename will\nbecome the key.\n\n--no_list option will merge all entries at the top level, if there is a\nconflict the lowest level will be extended with the new values (if list) or\nadded (if value)\n\n--add_parent_key option will add a parent key before merging all entries.\n\n--remove_parent_key option will remove the parent key before merging all\nentries.\n\n--recursive option will merge all entries (scalar) at the lowest layers as a\nlist.\n\n--average_last_layer option will average all entries (scalar) at the lowest\nlayers, but instead of creating a list it creates a mean/std level.\n\nFormerly: scil_merge_json.py",
+            "keywords": [],
+            "category": "json"
+        },
+        {
+            "name": "scil_connectivity_compute_matrices.py",
+            "description": "This script computes a variety of measures in the form of connectivity\nmatrices. This script is made to follow\nscil_tractogram_segment_bundles_for_connectivity.py and\nuses the same labels list as input.\n\nThe script expects a folder containing all relevants bundles following the\nnaming convention LABEL1_LABEL2.trk and a text file containing the list of\nlabels that should be part of the matrices. The ordering of labels in the\nmatrices will follow the same order as the list.\nThis script only generates matrices in the form of array, does not visualize\nor reorder the labels (node).\n\nThe parameter --similarity expects a folder with density maps\n(LABEL1_LABEL2.nii.gz) following the same naming convention as the input\ndirectory.\nThe bundles should be averaged version in the same space. This will\ncompute the weighted-dice between each node and their homologuous average\nversion.\n\nThe parameters --metrics can be used more than once and expect a map (t1, fa,\netc.) in the same space and each will generate a matrix. The average value in\nthe volume occupied by the bundle will be reported in the matrices nodes.\n\nThe parameters --maps can be used more than once and expect a folder with\npre-computed maps (LABEL1_LABEL2.nii.gz) following the same naming convention\nas the input directory. Each will generate a matrix. The average non-zeros\nvalue in the map will be reported in the matrices nodes.\n\nThe parameters --lesion_load will compute 3 lesion(s) related matrices:\nlesion_count.npy, lesion_vol.npy, lesion_sc.npy and put it inside of a\nspecified folder. They represent the number of lesion, the total volume of\nlesion(s) and the total of streamlines going through the lesion(s) for  of each\nconnection. Each connection can be seen as a 'bundle' and then something\nsimilar to scil_analyse_lesion_load.py is run for each 'bundle'.\n\nFormerly: scil_compute_connectivity.py",
+            "keywords": [],
+            "category": "connectivity"
+        },
+        {
+            "name": "scil_surface_apply_transform.py",
+            "description": "Script to apply a transform to a surface (FreeSurfer or VTK supported),\nusing output from ANTs registration tools (i.e. affine.txt, warp.nii.gz).\n\nExample usage from T1 to b0 using ANTs transforms:\n> ConvertTransformFile 3 output0GenericAffine.mat vtk_transfo.txt --hm\n> scil_surface_apply_transform.py lh_white_lps.vtk affine.txt lh_white_b0.vtk\\\n    --ants_warp warp.nii.gz\n\nImportant: The input surface needs to be in *T1 world LPS* coordinates\n(aligned over the T1 in MI-Brain).\n\nThe script will use the linear affine first and then the warp image.\nThe resulting surface will be in *b0 world LPS* coordinates\n(aligned over the b0 in MI-Brain).\n\nFormerly: scil_apply_transform_to_surface.py.",
+            "keywords": [
+                "registration",
+                "warp",
+                "transformation",
+                "surface",
+                "mesh",
+                "vtk FreeSurfer"
+            ],
+            "category": "surface"
+        },
+        {
+            "name": "scil_tractogram_filter_by_orientation.py",
+            "description": "Script to filter streamlines based on their distance traveled in a specific\ndimension (x, y, or z).\n\nUseful to help differentiate bundles.\n\nExamples: In a brain aligned with x coordinates in left - right axis and y\ncoordinates in anterior-posterior axis, a streamline from the ...\n    - corpus callosum will likely travel a very short distance in the y axis.\n    - cingulum will likely travel a very short distance in the x axis.\n\nNote: we consider that x, y, z are the coordinates of the streamlines; we\ndo not verify if they are aligned with the brain's orientation.\n\nSee also:\n    - scil_tractogram_detect_loops.py\n    - scil_tractogram_filter_by_anatomy.py\n    - scil_tractogram_filter_by_length.py\n    - scil_tractogram_filter_by_roi.py\n\nFormerly: scil_filter_streamlines_by_orientation.py",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_bundle_mean_fixel_bingham_metric.py",
+            "description": "Given a bundle and Bingham coefficients, compute the average Bingham\nmetric at each voxel intersected by the bundle. Intersected voxels are\nfound by computing the intersection between the voxel grid and each streamline\nin the input tractogram.\n\nThis script behaves like scil_compute_mean_fixel_afd_from_bundles.py for fODFs,\nbut here for Bingham distributions. These add the unique possibility to capture\nfixel-based fiber spread (FS) and fiber fraction (FF). FD from the bingham\nshould be \"equivalent\" to the AFD_fixel we are used to.\n\nBingham coefficients volume must come from scil_fodf_to_bingham.py\nand Bingham metrics comes from scil_bingham_metrics.py.\n\nBingham metrics are extracted from Bingham distributions fitted to fODF. There\nare as many values per voxel as there are lobes extracted. The values chosen\nfor a given voxelis the one belonging to the lobe better aligned with the\ncurrent streamline segment.\n\nPlease use a bundle file rather than a whole tractogram.\n\nFormerly: scil_compute_mean_fixel_obe_metric_from_bundles.py",
+            "keywords": [
+                "tractometry",
+                "lobe metrics",
+                "fiber density",
+                "fiber spread",
+                "fiber fraction",
+                "mean along bundle"
+            ],
+            "category": "bundle"
+        },
+        {
+            "name": "scil_bundle_clean_qbx_clusters.py",
+            "description": "Render clusters sequentially to either accept or reject them based on\nvisual inspection. Useful for cleaning bundles for RBx, BST or for figures.\nThe VTK window does not handle well opacity of streamlines, this is a\nnormal rendering behavior.\nOften use in pair with scil_tractogram_qbx.py.\n\nKey mapping:\n- a/A: accept displayed clusters\n- r/R: reject displayed clusters\n- z/Z: Rewing one element\n- c/C: Stop rendering of the background concatenation of streamlines\n- q/Q: Early window exist, everything remaining will be rejected",
+            "keywords": [],
+            "category": "bundle"
+        },
+        {
+            "name": "scil_viz_volume_screenshot.py",
+            "description": "Take screenshot(s) of one or more slices in a given image volume along the\nrequested axis. If slice indices are not provided, all slices in the volume\nare used. The name of the output images are suffixed with _slice_{id}, with\nid being the slice number in the volume. If a labelmap image is provided (e.g.\na tissue segmentation map), it is overlaid on the volume slices. Same goes if\na mask is provided, with the difference that it can be rendered as a\ntransparency overlay as well as a contour.\n\nA labelmap image can be provided as the image volume, without requiring it as\nthe optional argument if only the former needs to be plot.\n\nExample:\n>>> scil_viz_volume_screenshot.py t1.nii.gz t1_axial_annotated.png\n    --display_slice_number --display_lr\n\n>>> scil_viz_volume_screenshot.py t1.nii.gz t1_axial_masked.png\n    --transparency brainmask.nii.gz\n\n>>> scil_viz_volume_screenshot.py t1.nii.gz t1_axial.png\n    --slices 30 40 50 60 70 80 90 100\n\n>>> scil_viz_volume_screenshot.py t1.nii.gz t1_sagittal.png --axis sagittal\n\n>>> scil_viz_volume_screenshot.py t1.nii.gz t1_axial_plasma_cmap.png\n    --slices 30 40 50 60 70 80 90 100 --volume_cmap_name plasma\n\n>>> scil_viz_volume_screenshot.py t1.nii.gz t1_mask_overlay.png\n    --slices 30 40 50 60 70 80 90 100 --overlays brain_mask.nii.gz\n\n>>> scil_viz_volume_screenshot.py t1.nii.gz t1_mask_contour.png\n    --slices 30 40 50 60 70 80 90 100\n    --overlays brain_mask.nii.gz --overlays_as_contours\n\n>>> scil_viz_volume_screenshot.py t1.nii.gz t1_axial_tissue_map.png\n    --slices 30 40 50 60 70 80 90 100 --labelmap tissue_map.nii.gz\n\n>>> scil_viz_volume_screenshot.py t1.nii.gz t1_axial_tissue_viridis_cmap.png\n    --slices 30 40 50 60 70 80 90 100\n    --labelmap tissue_map.nii.gz --labelmap_cmap_name viridis\n\n>>> scil_viz_volume_screenshot.py t1.nii.gz t1_axial_peaks.png\n    --slices 30 40 50 60 70 80 90 100 --peaks peaks.nii.gz --volume_opacity 0.5",
+            "keywords": [],
+            "category": "viz"
+        },
+        {
+            "name": "scil_fodf_msmt.py",
+            "description": "Script to compute Multishell Multi-tissue Constrained Spherical Deconvolution\nODFs.\n\nBy default, will output all possible files, using default names.\nSpecific names can be specified using the file flags specified in the\n\"File flags\" section.\n\nIf --not_all is set, only the files specified explicitly by the flags\nwill be output.\n\nBased on B. Jeurissen et al., Multi-tissue constrained spherical\ndeconvolution for improved analysis of multi-shell diffusion\nMRI data. Neuroimage (2014)\n\nFormerly: scil_compute_msmt_fodf.py",
+            "keywords": [
+                "CSD",
+                "constrained spherical deconvolution",
+                "multi-shell",
+                "multi-tissue",
+                "msmt",
+                "volume fraction",
+                "fODF"
+            ],
+            "category": "fodf"
+        },
+        {
+            "name": "scil_tractogram_detect_loops.py",
+            "description": "This script can be used to remove loops in two types of streamline datasets:\n\n  - Whole brain: For this type, the script removes streamlines if they\n    make a loop with an angle of more than 360 degrees. It's possible to change\n    this angle with the --angle option. Warning: Don't use --qb option for a\n    whole brain tractography.\n\n  - Bundle dataset: For this type, it is possible to remove loops and\n    streamlines outside the bundle. For the sharp angle turn, use --qb option.\n\nSee also:\n    scil_tractogram_filter_by_anatomy.py\n\nFormerly: scil_detect_streamlines_loops.py",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_tractogram_commit.py",
+            "description": "Convex Optimization Modeling for Microstructure Informed Tractography (COMMIT)\nestimates, globally, how a given tractogram explains the DWI in terms of signal\nfit, assuming a certain forward microstructure model. It assigns a weight to\neach streamline, which represents how well it explains the DWI signal globally.\nThe default forward microstructure model is stick-zeppelin-ball, which requires\nmulti-shell data and a peak file (principal fiber directions in each voxel,\ntypically from a field of fODFs).\n\nIt is possible to use the ball-and-stick model for single-shell and multi-shell\ndata. In this case, the peak file is not mandatory. Multi-shell should follow a\n\"NODDI protocol\" (low and high b-values), multiple shells with similar b-values\nshould not be used with COMMIT.\n\nThe output from COMMIT is:\n- fit_NRMSE.nii.gz\n    fiting error (Normalized Root Mean Square Error)\n- fit_RMSE.nii.gz\n    fiting error (Root Mean Square Error)\n- results.pickle\n    Dictionary containing the experiment parameters and final weights\n- compartment_EC.nii.gz\n    (est. Extra-Cellular signal fraction)\n- compartment_IC.nii.gz\n    (est. Intra-Cellular signal fraction)\n- compartment_ISO.nii.gz\n    (est. isotropic signal fraction (freewater comportment)):\n    Each of COMMIT compartments\n- streamline_weights.txt\n    Text file containing the commit weights for each streamline of the\n    input tractogram.\n- streamlines_length.txt\n    Text file containing the length (mm) of each streamline.\n- streamline_weights_by_length.txt\n    Text file containing the commit weights for each streamline of the\n    input tractogram, ordered by their length.\n- tot_streamline_weights\n    Text file containing the total commit weights of each streamline.\n    Equal to commit_weights * streamlines_length (W_i * L_i)\n- essential.trk / non_essential.trk\n    Tractograms containing the streamlines below or equal (essential) and\n    above (non_essential) a threshold_weights of 0.\n- decompose_commit.h5\n    In the case where the input is a hdf5 file only, we will save an output\n    hdf5 with the following information separated into each bundle's dps:\n    - streamlines_weights\n    - streamline_weights_by_length\n    For each bundle, only the essential streamlines are kept.\n\nThis script can divide the input tractogram in two using a threshold to apply\non the streamlines' weight. The threshold used is 0.0, keeping only streamlines\nthat have non-zero weight and that contribute to explain the DWI signal.\nStreamlines with 0 weight are essentially not necessary according to COMMIT.\n\nCOMMIT2 is available only for HDF5 data from\nscil_tractogram_segment_bundles_for_connectivity.py and\nwith the --ball_stick option. Use the --commit2 option to activite it, slightly\nlonger computation time. This wrapper offers a simplify way to call COMMIT,\nbut does not allow to use (or fine-tune) every parameter. If you want to use\nCOMMIT with full access to all parameters,\nvisit: https://github.com/daducci/COMMIT\n\nWhen tunning parameters, such as --iso_diff, --para_diff, --perp_diff or\n--lambda_commit_2 you should evaluate the quality of results by:\n    - Looking at the 'density' (GTM) of the connnectome (essential tractogram)\n    - Confirm the quality of WM bundles reconstruction (essential tractogram)\n    - Inspect the (N)RMSE map and look for peaks or anomalies\n    - Compare the density map before and after (essential tractogram)\n\nFormerly: scil_run_commit.py",
+            "keywords": [
+                "microstructure informed",
+                "filtering",
+                "mit"
+            ],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_sh_convert.py",
+            "description": "Convert a SH file between the two of the following basis choices:\n'descoteaux07', 'descoteaux07_legacy', 'tournier07' or 'tournier07_legacy'.\nUsing the sh_basis argument, both the input and the output SH bases must be\ngiven, in the order. For more information about the bases, see\nhttps://docs.dipy.org/stable/theory/sh_basis.html.\n\nFormerly: scil_convert_sh_basis.py",
+            "keywords": [
+                "spherical harmonics",
+                "tournier",
+                "mrtrix",
+                "descoteaux",
+                "dipy",
+                "modern",
+                "legacy"
+            ],
+            "category": "sh"
+        },
+        {
+            "name": "scil_tractogram_fix_trk.py",
+            "description": "This script is made to fix DSI-Studio or Startrack TRK file\n(unknown space/convention) to make it compatible with TrackVis,\nMI-Brain, Dipy Horizon (Stateful Tractogram).\n\nDSI-Studio\n==========\n\nThe script either make it match with an anatomy from DSI-Studio (AC-PC aligned,\nsometimes flipped) or if --in_native_fa is provided it moves it back to native\nDWI space (this involved registration).\n\nSince DSI-Studio sometimes leaves some skull around the brain, the --auto_crop\naims to stabilize registration. If this option fails, manually BET both FA.\nRegistration is more robust at resolution above 2mm (iso), be careful.\n\nIf you are fixing bundles, use this script once with --save_transfo and verify\nresults. Once satisfied, call the scripts on bundles using a bash for loop with\n--load_transfo to save computation.\n\nWe recommand the --cut_invalid to remove invalid points of streamlines rather\nremoving entire streamlines.\n\nThis script was tested on various datasets and worked on all of them. However,\nalways verify the results and if a specific case does not work. Open an issue\non the Scilpy GitHub repository.\n\nStartrack\n==========\n\nThe script will create a new stateful tractogram using the reference in\norder to fix the missing information in the header of the trk.\n\n\nWARNING: This script is still experimental, DSI-Studio and Startrack\nevolve quickly and results may vary depending on the data itself\nas well as DSI-studio/Startrack version.\n\nFormerly: scil_fix_dsi_studio_trk.py",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_bundle_mean_std.py",
+            "description": "Compute mean and std for each metric.\n\n- Default: For the whole bundle. This is achieved by averaging the metric\n  values of all voxels occupied by the bundle.\n- Option --per_point: For all streamlines points in the bundle for each metric\n  combination, along the bundle, i.e. for each point.\n  **To create label_map and distance_map, see\n  scil_bundle_label_map.py\n\nDensity weighting modifies the contribution of voxel with lower/higher\nstreamline count to reduce influence of spurious streamlines.\n\nFormerly: scil_compute_bundle_mean_std_per_point.py or\nscil_compute_bundle_mean_std.py",
+            "keywords": [],
+            "category": "bundle"
+        },
+        {
+            "name": "scil_tractogram_cut_streamlines.py",
+            "description": "Filters streamlines and only keeps the parts of streamlines within or\nbetween the ROIs. Two options are available.\n\nInput mask:\n\nThe mask has either 1 entity/blob or\n2 entities/blobs (does not support disconnected voxels).\nThe option --biggest_blob can help if you have such a scenario.\n\nThe 1 entity scenario will 'trim' the streamlines so their longest segment is\nwithin the bounding box or a binary mask.\n\nThe 2 entities scenario will cut streamlines so their segment are within the\nbounding box or going from binary mask #1 to binary mask #2.\n\nInput label:\n\nThe label MUST contain 2 labels different from zero.\nLabel values could be anything.\nThe script will cut streamlines going from label 1 to label 2.\n\nBoth inputs and scenarios will erase data_per_point and data_per_streamline.\n\nFormerly: scil_cut_streamlines.py",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_tractogram_project_map_to_streamlines.py",
+            "description": "Projects maps extracted from a map onto the points of streamlines.\n\nThe default options will take data from a nifti image (3D or 4D) and project it\nonto the points of streamlines. If the image is 4D, the data is stored as a\nlist of 1D arrays per streamline. If the image is 3D, the data is stored as a\nlist of values per streamline.\n\nSee also scil_tractogram_project_streamlines_to_map.py for the reverse action.\n\n* Note that the data from your maps will be projected only on the coordinates\nof the points of your streamlines. Data underlying the whole segments between\ntwo consecutive points is not used. If your streamlines are strongly\ncompressed, or if they have a very big step size, the result will possibly\nreflect poorly your map. You may use scil_tractogram_resample.py to upsample\nyour streamlines first.\n\n* Hint: The streamlines themselves are not modified here, only their dpp. To\navoid multiplying data on disk, you could use the following arguments to save\nthe new dpp in your current tractogram:\n>> scil_tractogram_project_map_to_streamlines.py $in_bundle $in_bundle\n       --keep_all_dpp -f",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_mti_maps_ihMT.py",
+            "description": "This script computes four myelin indices maps from the Magnetization Transfer\n(MT) and inhomogeneous Magnetization Transfer (ihMT) images. Magnetization\nTransfer is a contrast mechanism in tissue resulting from the proton exchange\nbetween non-aqueous protons (from macromolecules and their closely associated\nwater molecules, the \"bound\" pool) and protons in the free water pool called\naqueous protons. This exchange attenuates the MRI signal, introducing\nmicrostructure-dependent contrast. MT's effect reflects the relative density\nof macromolecules such as proteins and lipids, it has been associated with\nmyelin content in white matter of the brain.\n\nDifferent contrasts can be done with an off-resonance pulse prior to image\nacquisition (a prepulse), saturating the protons on non-aqueous molecules,\nby applying different frequency irradiation. The two MT maps and two ihMT maps\nare obtained using six contrasts: single positive frequency image, single\nnegative frequency image, dual alternating positive/negative frequency image,\ndual alternating negative/positive frequency image (saturated images);\nand two unsaturated contrasts as reference. These two references should be\nacquired with predominant PD (proton density) and T1 weighting at different\nexcitation flip angles (a_PD, a_T1) and repetition times (TR_PD, TR_T1).\n\n\nInput Data recommendation:\n  - it is recommended to use dcm2niix (v1.0.20200331) to convert data\n    https://github.com/rordenlab/dcm2niix/releases/tag/v1.0.20200331\n  - dcm2niix conversion will create all echo files for each contrast and\n    corresponding json files\n  - all contrasts must have a same number of echoes and coregistered\n    between them before running the script\n  - Mask must be coregistered to the echo images\n  - ANTs can be used for the registration steps (http://stnava.github.io/ANTs/)\n\n\nThe output consists of a ihMT_native_maps folder containing the 4 myelin maps:\n    - MTR.nii.gz : Magnetization Transfer Ratio map\n    - ihMTR.nii.gz : inhomogeneous Magnetization Transfer Ratio map\n    The (ih)MT ratio is a measure reflecting the amount of bound protons.\n    - MTsat.nii.gz : Magnetization Transfer saturation map\n    - ihMTsat.nii.gz : inhomogeneous Magnetization Transfer saturation map\n    The (ih)MT saturation is a pseudo-quantitative maps representing\n    the signal change between the bound and free water pools.\n\nAs an option, the Complementary_maps folder contains the following images:\n    - altnp.nii.gz : dual alternating negative and positive frequency image\n    - altpn.nii.gz : dual alternating positive and negative frequency image\n    - positive.nii.gz : single positive frequency image\n    - negative.nii.gz : single negative frequency image\n    - mtoff_PD.nii.gz : unsaturated proton density weighted image\n    - mtoff_T1.nii.gz : unsaturated T1 weighted image\n    - MTsat_d.nii.gz : MTsat computed from the mean dual frequency images\n    - MTsat_sp.nii.gz : MTsat computed from the single positive frequency image\n    - MTsat_sn.nii.gz : MTsat computed from the single negative frequency image\n    - R1app.nii.gz : Apparent R1 map computed for MTsat.\n    - B1_map.nii.gz : B1 map after correction and smoothing (if given).\n\n\nThe final maps from ihMT_native_maps can be corrected for B1+ field\n  inhomogeneity, using either an empiric method with\n  --in_B1_map option, suffix *B1_corrected is added for each map.\n  --B1_correction_method empiric\n  or a model-based method with\n  --in_B1_map option, suffix *B1_corrected is added for each map.\n  --B1_correction_method model_based\n  --B1_fitValues 3 .mat files, obtained externally from\n    https://github.com/TardifLab/OptimizeIHMTimaging/tree/master/b1Correction,\n    and given in this order: positive frequency saturation, negative frequency\n    saturation, dual frequency saturation.\nFor both methods, the nominal value of the B1 map can be set with\n  --B1_nominal value\n\n\n>>> scil_mti_maps_ihMT.py path/to/output/directory\n    --in_altnp path/to/echo*altnp.nii.gz --in_altpn path/to/echo*altpn.nii.gz\n    --in_mtoff_pd path/to/echo*mtoff.nii.gz\n    --in_negative path/to/echo*neg.nii.gz --in_positive path/to/echo*pos.nii.gz\n    --in_mtoff_t1 path/to/echo*T1w.nii.gz --mask path/to/mask_bin.nii.gz\n    --in_jsons path/to/echo*mtoff.json path/to/echo*T1w.json\n\nBy default, the script uses all the echoes available in the input folder.\nIf you want to use a single echo, replace the * with the specific number of\nthe echo.",
+            "keywords": [
+                "MTI",
+                "magnetization transfer",
+                "MT",
+                "ihMT",
+                "ihMTR",
+                "ihMTsat",
+                "myelin",
+                "MTR",
+                "MTsat"
+            ],
+            "category": "mti"
+        },
+        {
+            "name": "scil_gradients_convert.py",
+            "description": "Script to convert gradient tables between FSL and MRtrix formats.\n\nFormerly: scil_convert_gradients_mrtrix_to_fsl.py or\nscil_convert_gradients_fsl_to_mrtrix.py",
+            "keywords": [
+                "gradients",
+                "gradient table",
+                "fsl format",
+                "mrtrix format",
+                "bval",
+                "bvec"
+            ],
+            "category": "gradients"
+        },
+        {
+            "name": "scil_gradients_validate_correct.py",
+            "description": "Detect sign flips and/or axes swaps in the gradients table from a fiber\ncoherence index [1]. The script takes as input the principal direction(s)\nat each voxel, the b-vectors and the fractional anisotropy map and outputs\na corrected b-vectors file.\n\nA typical pipeline could be:\n>>> scil_dti_metrics.py dwi.nii.gz bval bvec --not_all --fa fa.nii.gz\n    --evecs peaks.nii.gz\n>>> scil_gradients_validate_correct.py bvec peaks_v1.nii.gz fa.nii.gz bvec_corr\n\nNote that peaks_v1.nii.gz is the file containing the direction associated\nto the highest eigenvalue at each voxel.\n\nIt is also possible to use a file containing multiple principal directions per\nvoxel, given that they are sorted by decreasing amplitude. In that case, the\nfirst direction (with the highest amplitude) will be chosen for validation.\nOnly 4D data is supported, so the directions must be stored in a single\ndimension. For example, peaks.nii.gz from scil_fodf_metrics.py could be used.\n\nFormerly: scil_validate_and_correct_bvecs.py",
+            "keywords": [
+                "fiber coherence index",
+                "coherence"
+            ],
+            "category": "gradients"
+        },
+        {
+            "name": "scil_bundle_pairwise_comparison.py",
+            "description": "Evaluate pair-wise similarity measures of bundles.\nAll tractograms must be in the same space (aligned to one reference).\n\nFor the voxel representation, the computed similarity measures are:\n    bundle_adjacency_voxels, dice_voxels, w_dice_voxels, density_correlation\n    volume_overlap, volume_overreach\nThe same measures are also evluated for the endpoints.\n\nFor the streamline representation, the computed similarity measures are:\n    bundle_adjacency_streamlines, dice_streamlines, streamlines_count_overlap,\n    streamlines_count_overreach\n\nFormerly: scil_evaluate_bundles_pairwise_agreement_measures.py",
+            "keywords": [],
+            "category": "bundle"
+        },
+        {
+            "name": "scil_dwi_compute_snr.py",
+            "description": "Script to compute signal to noise ratio (SNR) in a region of interest (ROI)\nof a DWI volume.\n\nIt will compute the SNR for all DWI volumes of the input image seperately.\nThe output will contain the SNR which is the ratio of\nmean(signal) / std(noise).\nThe mean of the signal is computed inside the mask.\nThe standard deviation of the noise is estimated inside the noise_mask\nor inside the same mask if a noise_map is provided.\nIf it's not supplied, it will be estimated using the data outside the brain,\ncomputed with Dipy medotsu\n\nIf verbose is True, the SNR for every DWI volume will be output.\n\nThis works best in a well-defined ROI such as the corpus callosum.\nIt is heavily dependent on the ROI and its quality.\n\nWe highly recommend using a noise_map if you can acquire one.\nSee refs [1, 2] that describe the noise map acquisition.\n[1] St-Jean, et al (2016). Non Local Spatial and Angular Matching...\n    https://doi.org/10.1016/j.media.2016.02.010\n[2] Reymbaut, et al (2021). Magic DIAMOND...\n    https://doi.org/10.1016/j.media.2021.101988\n\nFormerly: scil_snr_in_roi.py",
+            "keywords": [],
+            "category": "dwi"
+        },
+        {
+            "name": "scil_dti_metrics.py",
+            "description": "Script to compute all of the Diffusion Tensor Imaging (DTI) metrics.\n\nBy default, will output all available metrics, using default names. Specific\nnames can be specified using the metrics flags that are listed in the \"Metrics\nfiles flags\" section.\n\nIf --not_all is set, only the metrics specified explicitly by the flags\nwill be output. The available metrics are:\n\nfractional anisotropy (FA), geodesic anisotropy (GA), axial diffusivisty (AD),\nradial diffusivity (RD), mean diffusivity (MD), mode, red-green-blue colored\nFA (rgb), principal tensor e-vector and tensor coefficients (dxx, dxy, dxz,\ndyy, dyz, dzz).\n\nFor all the quality control metrics such as residual, physically implausible\nsignals, pulsation and misalignment artifacts, see\n[J-D Tournier, S. Mori, A. Leemans. Diffusion Tensor Imaging and Beyond.\nMRM 2011].\n\nFormerly: scil_compute_dti_metrics.py",
+            "keywords": [
+                "dti",
+                "metrics",
+                "diffusion tensor",
+                "FA",
+                "MD",
+                "AD",
+                "RD",
+                "RGB",
+                "eigenvector",
+                "eigenvalue",
+                "diffusivity"
+            ],
+            "category": "dti"
+        },
+        {
+            "name": "scil_NODDI_maps.py",
+            "description": "Compute NODDI [1] maps using AMICO.\nMulti-shell DWI necessary.\n\nFormerly: scil_compute_NODDI.py",
+            "keywords": [],
+            "category": "NODDI"
+        },
+        {
+            "name": "scil_tractogram_extract_ushape.py",
+            "description": "This script extracts streamlines depending on their U-shapeness.\nThis script is a replica of Trackvis method.\n\nWhen ufactor is close to:\n*  0 it defines straight streamlines\n*  1 it defines U-fibers\n* -1 it defines S-fibers\n\nFormerly: scil_extract_ushape.py",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_frf_mean.py",
+            "description": "Compute the mean Fiber Response Function from a set of individually\ncomputed Response Functions.\n\nThe FRF files are obtained from scil_frf_ssst.py, scil_frf_msmt.py in the\ncase of multi-shell data or scil_frf_memsmt.py in the case of multi-encoding\nmulti-shell data.\n\nFormerly: scil_compute_mean_frf.py",
+            "keywords": [
+                "fiber response function",
+                "response function",
+                "RF",
+                "FRF",
+                "mean",
+                "mean FRF"
+            ],
+            "category": "frf"
+        },
+        {
+            "name": "scil_connectivity_hdf5_average_density_map.py",
+            "description": "Compute a density map for each connection from a hdf5 file.\nTypically use after scil_tractogram_segment_bundles_for_connectivity.py in\norder to obtain the average density map of each connection to allow the use\nof --similarity in scil_connectivity_compute_matrices.py.\n\nThis script is parallelized, but will run much slower on non-SSD if too many\nprocesses are used. The output is a directory containing the thousands of\nconnections:\nout_dir/\n    |-- LABEL1_LABEL1.nii.gz\n    |-- LABEL1_LABEL2.nii.gz\n    |-- [...]\n    |-- LABEL90_LABEL90.nii.gz\n\nFormerly: scil_compute_hdf5_average_density_map.py",
+            "keywords": [],
+            "category": "connectivity"
+        },
+        {
+            "name": "scil_fodf_memsmt.py",
+            "description": "Script to compute multi-encoding multi-shell multi-tissue (memsmt)\nConstrained Spherical Deconvolution ODFs.\n\nIn order to operate, the script only needs the data from one type of b-tensor\nencoding. However, giving only a spherical one will not produce good fODFs, as\nit only probes spherical shapes. As for planar encoding, it should technically\nwork alone, but seems to be very sensitive to noise and is yet to be properly\ndocumented. We thus suggest to always use at least the linear encoding, which\nwill be equivalent to standard multi-shell multi-tissue if used alone, in\ncombinaison with other encodings. Note that custom encodings are not yet\nsupported, so that only the linear tensor encoding (LTE, b_delta = 1), the\nplanar tensor encoding (PTE, b_delta = -0.5), the spherical tensor encoding\n(STE, b_delta = 0) and the cigar shape tensor encoding (b_delta = 0.5) are\navailable.\n\nAll of `--in_dwis`, `--in_bvals`, `--in_bvecs` and `--in_bdeltas` must have the\nsame number of arguments. Be sure to keep the same order of encodings\nthroughout all these inputs and to set `--in_bdeltas` accordingly (IMPORTANT).\n\nBy default, will output all possible files, using default names.\nSpecific names can be specified using the file flags specified in the\n\"File flags\" section.\n\nIf --not_all is set, only the files specified explicitly by the flags\nwill be output.\n\n>>> scil_fodf_memsmt.py wm_frf.txt gm_frf.txt csf_frf.txt --in_dwis LTE.nii.gz\n    PTE.nii.gz STE.nii.gz --in_bvals LTE.bval PTE.bval STE.bval --in_bvecs\n    LTE.bvec PTE.bvec STE.bvec --in_bdeltas 1 -0.5 0 --mask mask.nii.gz\n\nBased on P. Karan et al., Bridging the gap between constrained spherical\ndeconvolution and diffusional variance decomposition via tensor-valued\ndiffusion MRI. Medical Image Analysis (2022)\n\nFormerly: scil_compute_memsmt_fodf.py",
+            "keywords": [
+                "b-tensor",
+                "b-tensor encoding",
+                "multi-encoding",
+                "multi-shell",
+                "multi-tissue",
+                "memsmt",
+                "linear tensor encoding (LTE)",
+                "planar tensor encoding (PTE)",
+                "spherical tensor encoding (STE)",
+                "multidimensional diffusion MRI",
+                "volume fraction",
+                "CSD",
+                "constrained spherical deconvolution",
+                "fODF"
+            ],
+            "category": "fodf"
+        },
+        {
+            "name": "scil_volume_stats_in_labels.py",
+            "description": "Computes the information from the input map for each cortical region\n(corresponding to an atlas).\n\nHint: For instance, this script could be useful if you have a seed map from a\nspecific bundle, to know from which regions it originated.\n\nFormerly: scil_compute_seed_by_labels.py",
+            "keywords": [],
+            "category": "volume"
+        },
+        {
+            "name": "scil_fodf_metrics.py",
+            "description": "Script to compute the maximum Apparent Fiber Density (AFD), the fiber ODFs\norientations, values and indices (peaks, peak_values, peak_indices), the Number\nof Fiber Orientations (NuFO) maps from fiber ODFs and the RGB map.\n\nAFD_max map is the maximal fODF amplitude for each voxel.\n\nNuFO is the the number of maxima of the fODF with an ABSOLUTE amplitude above\nthe threshold set using --at, AND an amplitude above the RELATIVE threshold\nset using --rt.\n\nThe --at argument should be set to a value which is 1.5 times the maximal\nvalue of the fODF in the ventricules. This can be obtained with the\nscil_fodf_max_in_ventricles.py script.\n\nIf the --abs_peaks_and_values argument is set, the peaks are all normalized\nand the peak_values are equal to the actual fODF amplitude of the peaks. By\ndefault, the script max-normalizes the peak_values for each voxel and\nmultiplies the peaks by peak_values.\n\nBy default, will output all possible files, using default names. Specific names\ncan be specified using the file flags specified in the \"File flags\" section.\n\nIf --not_all is set, only the files specified explicitly by the flags will be\noutput.\n\nSee [Raffelt et al. NeuroImage 2012] and [Dell'Acqua et al HBM 2013] for the\ndefinitions.\n\nFormerly: scil_compute_fodf_metrics.py",
+            "keywords": [
+                "fODF metrics",
+                "NuFO",
+                "peaks",
+                "directions",
+                "peak values",
+                "peak indices",
+                "rgb",
+                "afd"
+            ],
+            "category": "fodf"
+        },
+        {
+            "name": "scil_bundle_reject_outliers.py",
+            "description": "Clean a bundle (inliers/outliers) using hiearchical clustering.\nhttp://archive.ismrm.org/2015/2844.html\n\nIf spurious streamlines are dense, it is possible they will not be recognized\nas outliers. Manual cleaning may be required to overcome this limitation.",
+            "keywords": [],
+            "category": "bundle"
+        },
+        {
+            "name": "scil_dwi_prepare_eddy_command.py",
+            "description": "Prepare a typical command for eddy and create the necessary files. When using\nmultiple acquisitions and/or opposite phase directions, images, b-values and\nb-vectors should be merged together using scil_dwi_concatenate.py. If using\ntopup prior to calling this script, images should be concatenated in the same\norder as the b0s used with prepare_topup.\n\nFormerly: scil_prepare_eddy_command.py",
+            "keywords": [],
+            "category": "dwi"
+        },
+        {
+            "name": "scil_frf_ssst.py",
+            "description": "Compute a single Fiber Response Function from a DWI.\n\nA DTI fit is made, and voxels containing a single fiber population are\nfound using a threshold on the FA.\n\nFormerly: scil_compute_ssst_frf.py",
+            "keywords": [
+                "fiber response function",
+                "response function",
+                "RF",
+                "FRF",
+                "single-shell",
+                "single-tissue",
+                "ssst"
+            ],
+            "category": "frf"
+        },
+        {
+            "name": "scil_bundle_diameter.py",
+            "description": "Script to estimate the diameter of bundle(s) along their length.\nSee also scil_bundle_shape_measures.py, which prints a quick estimate of\nthe diameter (volume / length). The computation here is more complex and done\nfor each section of the bundle.\n\nThe script expects:\n- bundles with coherent endpoints from scil_tractogram_uniformize_endpoints.py\n- labels maps with around 5-50 points scil_bundle_label_map.py\n    <5 is not enough, high risk of bad fit\n    >50 is too much, high risk of bad fit\n- bundles that are close to a tube\n    without major fanning in a single axis\n    fanning is in 2 directions (uniform dispersion) good approximation\n\nThe scripts prints a JSON file with mean/std to be compatible with tractometry.\nWARNING: STD is in fact an ERROR measure from the fit and NOT an STD.\n\nSince the estimation and fit quality is not always intuitive for some bundles\nand the tube with varying diameter is not easy to color/visualize,\nthe script comes with its own VTK rendering to allow exploration of the data.\n(optional).\n\nFormerly: scil_estimate_bundles_diameter.py",
+            "keywords": [],
+            "category": "bundle"
+        },
+        {
+            "name": "scil_dwi_reorder_philips.py",
+            "description": "Re-order gradient according to original table (Philips)\nThis script is not needed for version 5.6 and higher\n\nFormerly: scil_reorder_dwi_philips.py",
+            "keywords": [
+                "Philips",
+                "DWI reorder",
+                "original gradient table"
+            ],
+            "category": "dwi"
+        },
+        {
+            "name": "scil_gradients_modify_axes.py",
+            "description": "Flip (ex, x --> -x) or swap (ex, x <-> y) chosen axes of the gradient sampling\nmatrix. Result will be saved in the same format as input gradient sampling\nfile.\n\nFormerly: scil_flip_gradients.py or scil_swap_gradient_axis.py",
+            "keywords": [],
+            "category": "gradients"
+        },
+        {
+            "name": "scil_tracking_pft_maps.py",
+            "description": "Compute include and exclude maps, and the seeding interface mask from partial\nvolume estimation (PVE) maps. Maps should have values in [0,1], gm+wm+csf=1 in\nall voxels of the brain, gm+wm+csf=0 elsewhere.\n\nReferences: Girard, G., Whittingstall K., Deriche, R., and Descoteaux, M.\n(2014). Towards quantitative connectivity analysis: reducing tractography\nbiases. Neuroimage.\n\nFormerly: scil_compute_maps_for_particle_filter_tracking.py",
+            "keywords": [
+                "particle filter tractography",
+                "continuous map criterion",
+                "tracking",
+                "fodf",
+                "cmc",
+                "particle filtering tractography"
+            ],
+            "category": "tracking"
+        },
+        {
+            "name": "scil_dwi_powder_average.py",
+            "description": "Script to compute powder average (mean diffusion weighted image) from set of\ndiffusion images.\n\nBy default will output an average image calculated from all images with\nnon-zero bvalue.\n\nSpecify --bvalue to output an image for a single shell\n\nScript currently does not take into account the diffusion gradient directions\nbeing averaged.\n\nFormerly: scil_compute_powder_average.py",
+            "keywords": [
+                "powder average",
+                "DWI"
+            ],
+            "category": "dwi"
+        },
+        {
+            "name": "scil_gradients_round_bvals.py",
+            "description": "Select b-values on specific b-value shells.\n\nWith the --tolerance argument, this is useful for sampling schemes where\nb-values of a shell are not all identical. Adjust the tolerance to vary the\naccepted interval around the targetted b-value.\n\nFor example, a b-value of 2000 and a tolerance of 20 will select all b-values\nbetween [1980, 2020] and round them to the value of 2000.\n\n>> scil_gradients_round_bvals.py bvals 0 1000 2000 newbvals --tolerance 20\n\nFormerly: scil_resample_bvals.py",
+            "keywords": [
+                "bvals",
+                "b-value",
+                "round bvals",
+                "shell"
+            ],
+            "category": "gradients"
+        },
+        {
+            "name": "scil_bundle_mean_fixel_afd_from_hdf5.py",
+            "description": "Compute the mean Apparent Fiber Density (AFD) and mean Radial fODF (radfODF)\nmaps for every connections within a hdf5 (.h5) file.\n\nThis is the \"real\" fixel-based fODF amplitude along every streamline\nof each connection, averaged at every voxel.\n\nPlease use a hdf5 (.h5) file containing decomposed connections\n\nFormerly: scil_compute_fixel_afd_from_hdf5.py",
+            "keywords": [],
+            "category": "bundle"
+        },
+        {
+            "name": "scil_dwi_split_by_indices.py",
+            "description": "Splits the DWI image at certain indices along the last dimension (b-values).\nMany indices can be given at once by specifying multiple values. The splited\nvolumes are in the same order as in the original file. Also outputs the\ncorresponding .bval and .bvec files.\n\nThis script can be useful for splitting images at places where a b-value\nextraction does not work. For instance, if one wants to split the x first\nb-1500s from the rest of the b-1500s in an image, simply put x as an index.\n\nFormerly: scil_split_image.py",
+            "keywords": [
+                "DWI splitting",
+                "DWI split",
+                "indices"
+            ],
+            "category": "dwi"
+        },
+        {
+            "name": "scil_fodf_ssst.py",
+            "description": "Script to compute Constrained Spherical Deconvolution (CSD) fiber ODFs.\n\nSee [Tournier et al. NeuroImage 2007]\n\nFormerly: scil_compute_ssst_fodf.py",
+            "keywords": [
+                "CSD",
+                "constrained spherical deconvolution",
+                "single-shell",
+                "single-tissue",
+                "ssst",
+                "fODF"
+            ],
+            "category": "fodf"
+        },
+        {
+            "name": "scil_tractogram_filter_by_length.py",
+            "description": "Script to filter streamlines based on their lengths.\n\nSee also:\n    - scil_tractogram_detect_loops.py\n    - scil_tractogram_filter_by_anatomy.py\n        (Filtering by length is its step1)\n    - scil_tractogram_filter_by_orientation.py\n    - scil_tractogram_filter_by_roi.py\n\nFormerly: scil_filter_streamlines_by_length.py",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_bundle_compute_centroid.py",
+            "description": "Compute a single bundle centroid, using an 'infinite' QuickBundles threshold.\n\nFormerly: scil_compute_centroid.py",
+            "keywords": [],
+            "category": "bundle"
+        },
+        {
+            "name": "scil_viz_tractogram_seeds.py",
+            "description": "Visualize seeds used to generate the tractogram or bundle.\nWhen tractography was run, each streamline produced by the tracking algorithm\nsaved its seeding point (its origin).\n\nThe tractogram must have been generated from scil_tracking_local.py or\nscil_tracking_pft.py with the --save_seeds option.",
+            "keywords": [
+                "visualize",
+                "seed",
+                "streamline",
+                "streamline origin"
+            ],
+            "category": "viz"
+        },
+        {
+            "name": "scil_connectivity_print_filenames.py",
+            "description": "Output the list of filenames using the coordinates from a binary connectivity\nmatrix. Typically used to move around files that are considered valid after\nthe scil_connectivity_filter.py script.\n\nExample:\n# Keep connections with more than 1000 streamlines for 100% of a population\nscil_connectivity_filter.py filtering_mask.npy\n    --greater_than */streamlines_count.npy 1000 1.0\nscil_connectivity_print_filenames.py filtering_mask.npy\n    labels_list.txt pass.txt\nfor file in $(cat pass.txt);\n    do mv ${SOMEWHERE}/${FILE} ${SOMEWHERE_ELSE}/;\ndone\n\nFormerly: scil_print_connectivity_filenames.py",
+            "keywords": [],
+            "category": "connectivity"
+        },
+        {
+            "name": "scil_viz_gradients_screenshot.py",
+            "description": "Vizualisation for directions on a sphere, either from a gradient sampling (i.e.\na list of b-vectors) or from a Dipy sphere.",
+            "keywords": [],
+            "category": "viz"
+        },
+        {
+            "name": "scil_dwi_convert_FDF.py",
+            "description": "Converts a Varian FDF file or directory to a nifti file.\nIf the procpar contains diffusion information, it will be saved as bval and\nbvec in the same folder as the output file.\n\nex: scil_dwi_convert_FDF.py semsdw/b0_folder/ semsdw/dwi_folder/         dwi.nii.gz --bval dwi.bval --bvec dwi.bvec -f\n\nFormerly: scil_convert_fdf.py",
+            "keywords": [],
+            "category": "dwi"
+        },
+        {
+            "name": "scil_tractogram_dpp_math.py",
+            "description": "Performs an operation on data per point (dpp) from input streamlines.\n\nAlthough the input data always comes from the dpp, the output can be either\na dpp or a data_per_streamline (dps), depending on the chosen options.\nTwo modes of operation are supported: dpp and dps.\n   - In dps mode, the operation is performed on dpp across the dimension of\n   the streamlines resulting in a single value (or array in the 4D case)\n   per streamline, stored as dps.\n   - In dpp mode, the operation is performed on each point separately,\n   resulting in a new dpp.\n\nIf endpoints_only and dpp mode is set the operation will only be calculated at\nthe streamline endpoints the rest of the values along the streamline will be\nNaN.\n\nIf endpoints_only and dps mode is set operation will be calculated across the\ndata at the endpoints and stored as a single value (or array in the 4D case)\nper streamline.\n\nEndpoint only operation:\ncorrelation: correlation calculated between arrays extracted from streamline\nendpoints (data must be multivalued per point) and dps mode must be set.",
+            "keywords": [
+                "tractogram",
+                "data per point"
+            ],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_dki_metrics.py",
+            "description": "Script to compute the Diffusion Kurtosis Imaging (DKI) and Mean Signal DKI\n(MSDKI) metrics. DKI is a multi-shell diffusion model. The input DWI needs\nto be multi-shell, i.e. multi-bvalued.\n\nSince the diffusion kurtosis model involves the estimation of a large number\nof parameters and since the non-Gaussian components of the diffusion signal\nare more sensitive to artefacts, you should really denoise your DWI volume\nbefore using this DKI script (e.g. scil_denoising_nlmeans.py). Moreover, to\nremove biases due to fiber dispersion, fiber crossings and other mesoscopic\nproperties of the underlying tissue, MSDKI does a powder-average of DWI for all\ndirections, thus removing the orientational dependencies and creating an\nalternative mean kurtosis map.\n\nDKI is also known to be vulnerable to artefacted voxels induced by the\nlow radial diffusivities of aligned white matter (CC, CST voxels). Since it is\nvery hard to capture non-Gaussian information due to the low decays in radial\ndirection, its kurtosis estimates have very low robustness.\nNoisy kurtosis estimates tend to be negative and its absolute values can have\norder of magnitudes higher than the typical kurtosis values. Consequently,\nthese negative kurtosis values will heavily propagate to the mean and radial\nkurtosis metrics. This is well-reported in [Rafael Henriques MSc thesis 2012,\nchapter 3]. Two ways to overcome this issue: i) compute the kurtosis values\nfrom powder-averaged MSDKI, and ii) perform 3D Gaussian smoothing. On\npowder-averaged signal decays, you don't have this low diffusivity issue and\nyour kurtosis estimates have much higher precision (additionally they are\nindependent to the fODF).\n\nBy default, will output all available metrics, using default names. Specific\nnames can be specified using the metrics flags that are listed in the \"Metrics\nfiles flags\" section. If --not_all is set, only the metrics specified\nexplicitly by the flags will be output.\n\nThis script directly comes from the DIPY example gallery and references\ntherein.\n[1] examples_built/reconst_dki/#example-reconst-dki\n[2] examples_built/reconst_msdki/#example-reconst-msdki\n\nFormerly: scil_compute_kurtosis_metrics.py",
+            "keywords": [],
+            "category": "dki"
+        },
+        {
+            "name": "scil_labels_remove.py",
+            "description": "Script to remove specific labels from an atlas volume.\n\n    >>> scil_labels_remove.py DKT_labels.nii out_labels.nii.gz -i 5001 5002\n\nFormerly: scil_remove_labels.py",
+            "keywords": [],
+            "category": "labels"
+        },
+        {
+            "name": "scil_dwi_detect_volume_outliers.py",
+            "description": "This script simply finds the 3 closest angular neighbors of each direction\n(per shell) and compute the voxel-wise correlation.\nIf the angles or correlations to neighbors are below the shell average (by\nargs.std_scale x STD) it will flag the volume as a potential outlier.\n\nThis script supports multi-shells, but each shell is independant and detected\nusing the --b0_threshold parameter.\n\nThis script can be run before any processing to identify potential problem\nbefore launching pre-processing.",
+            "keywords": [],
+            "category": "dwi"
+        },
+        {
+            "name": "scil_get_version.py",
+            "description": "Give you information about your current scilpy installation.\nThis is useful for non-developers to give you the information\nneeded to reproduce your results, or to help debugging.\n\nIf you are experiencing a bug, please run this script and\nsend the output to the scilpy developers.",
+            "keywords": [],
+            "category": "get"
+        },
+        {
+            "name": "scil_bundle_generate_priors.py",
+            "description": "Generation of priors and enhanced-FOD from an example/template bundle.\nThe bundle must have been cleaned thorougly before use. The E-FOD can then\nbe used for bundle-specific tractography, but not for FOD metrics.\n\nFormerly: scil_generate_priors_from_bundle.py",
+            "keywords": [],
+            "category": "bundle"
+        },
+        {
+            "name": "scil_bundle_score_many_bundles_one_tractogram.py",
+            "description": "This script is intended to score all bundles from a single tractogram. Each\nvalid bundle is compared to its ground truth.\nEx: It was used for the ISMRM 2015 Challenge scoring.\n\nSee also scil_bundle_score_same_bundle_many_segmentations.py to score many\nversions of a same bundle, compared to ONE ground truth / gold standard.\n\nThis script is the second part of script scil_score_tractogram, which also\nsegments the wholebrain tractogram into bundles first.\n\nHere we suppose that the bundles are already segmented and saved as follows:\n    main_dir/\n        segmented_VB/*_VS.trk.\n        segmented_IB/*_*_IC.trk   (optional)\n        segmented_WPC/*_wpc.trk  (optional)\n        IS.trk  OR  NC.trk  (if segmented_IB is present)\n\nConfig file\n-----------\nThe config file needs to be a json containing a dict of the ground-truth\nbundles as keys. The value for each bundle is itself a dictionnary with:\n\n    - gt_mask: expected result. OL and OR metrics will be computed from this.*\n\n* Files must be .tck, .trk, .nii or .nii.gz. If it is a tractogram, a mask will\nbe created. If it is a nifti file, it will be considered to be a mask.\n\nExemple config file:\n{\n  \"Ground_truth_bundle_0\": {\n    \"gt_mask\": \"PATH/bundle0.nii.gz\",\n  }\n}\n\nFormerly: scil_score_bundles.py",
+            "keywords": [],
+            "category": "bundle"
+        },
+        {
+            "name": "scil_dwi_apply_bias_field.py",
+            "description": "Apply bias field correction to DWI. This script doesn't compute the bias\nfield itself. It ONLY applies an existing bias field. Please use the ANTs\nN4BiasFieldCorrection executable to compute the bias field.\n\nFormerly: scil_apply_bias_field_on_dwi.py",
+            "keywords": [],
+            "category": "dwi"
+        },
+        {
+            "name": "scil_volume_reshape_to_reference.py",
+            "description": "Reshape / reslice / resample *.nii or *.nii.gz using a reference.\nThis script can be used to align freesurfer/civet output, as .mgz,\nto the original input image.\n\n>>> scil_volume_reshape_to_reference.py wmparc.mgz t1.nii.gz wmparc_t1.nii.gz\\\n    --interpolation nearest\n\nFormerly: scil_reshape_to_reference.py",
+            "keywords": [],
+            "category": "volume"
+        },
+        {
+            "name": "scil_tracking_local.py",
+            "description": "Local streamline HARDI tractography.\nThe tracking direction is chosen in the aperture cone defined by the\nprevious tracking direction and the angular constraint.\n\nWARNING: This script DOES NOT support asymetric FODF input (aFODF).\n\nAlgo 'eudx': select the peak from the spherical function (SF) most closely\naligned to the previous direction, and follow an average of it and the previous\ndirection [1].\n\nAlgo 'det': select the orientation corresponding to the maximum of the\nspherical function.\n\nAlgo 'prob': select a direction drawn from the empirical distribution function\ndefined from the SF.\n\nAlgo 'ptt': select the propagation direction using Parallel-Transport\nTractography (PTT) framework, see [2] for more details.\n\nNOTE: eudx can be used with pre-computed peaks from fodf as well as\nevecs_v1.nii.gz from scil_dti_metrics.py (experimental).\n\nNOTE: If tracking with PTT, the step-size should be smaller than usual,\ni.e 0.1-0.2mm or lower. The maximum angle between segments (theta) should\nbe between 10 and 20 degrees.\n\nThe local tracking algorithm can also run on the GPU using the --use_gpu\noption (experimental). By default, GPU tracking behaves the same as\nDIPY. Below is a list of known divergences between the CPU and GPU\nimplementations:\n    * Backend: The CPU implementation uses DIPY's LocalTracking and the\n        GPU implementation uses an in-house OpenCL implementation.\n    * Algo: For the GPU implementation, the only available algorithm is\n        Algo 'prob'.\n    * SH interpolation: For GPU tracking, SH interpolation can be set to either\n        nearest neighbour or trilinear (default). With DIPY, the only available\n        method is trilinear.\n    * Forward tracking: For GPU tracking, the `--forward_only` flag can be used\n        to disable backward tracking. This option isn't available for CPU\n        tracking.\n\nAll the input nifti files must be in isotropic resolution.\n\n\nReferences\n----------\n[1]: Garyfallidis, E. (2012). Towards an accurate brain tractography\n[PhD thesis]. University of Cambridge. United Kingdom.\n\n[2]: Aydogan, D. B., & Shi, Y. (2020). Parallel transport tractography.\nIEEE transactions on medical imaging, 40(2), 635-647.\n\nFormerly: scil_compute_local_tracking.py",
+            "keywords": [
+                "eudx",
+                "tractography",
+                "tracking",
+                "peak tracking",
+                "local tracking",
+                "probabilistic",
+                "deterministic",
+                "prob",
+                "det"
+            ],
+            "category": "tracking"
+        },
+        {
+            "name": "scil_tractogram_resample_nb_points.py",
+            "description": "Script to resample a set of streamlines to either a new number of points per\nstreamline or to a fixed step size. WARNING: data_per_point is not carried.\n\nFormerly: scil_resample_streamlines.py",
+            "keywords": [],
+            "category": "tractogram"
+        },
+        {
+            "name": "scil_bundle_label_map.py",
+            "description": "Compute the label image (Nifti) from a centroid and tractograms (all\nrepresenting the same bundle). The label image represents the coverage of\nthe bundle, segmented into regions labelled from 0 to --nb_pts, starting from\nthe head, ending in the tail.\n\nEach voxel will have the label of its nearest centroid point.\n\nThe number of labels will be the same as the centroid's number of points.\n\nFormerly: scil_compute_bundle_voxel_label_map.py",
+            "keywords": [
+                "parcellate",
+                "subdivide",
+                "split"
+            ],
+            "category": "bundle"
+        },
+        {
+            "name": "scil_dwi_concatenate.py",
+            "description": "Concatenate DWI, bval and bvecs together. File must be specified in matching\norder. Default data type will be the same as the first input DWI.\n\nFormerly: scil_concatenate_dwi.py",
+            "keywords": [
+                "merge",
+                "fuse",
+                "concatenate",
+                "diffusion data",
+                "DWI"
+            ],
+            "category": "dwi"
+        }
+    ]
+}
